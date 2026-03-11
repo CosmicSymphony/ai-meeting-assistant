@@ -1,0 +1,25 @@
+{
+  "meeting_title": "Auto-generated meeting",
+  "meeting_date": "2026-03-11",
+  "meeting_timestamp": "2026-03-11 15:53:40",
+  "participants": [],
+  "transcript": "Alex: Quick meeting today about our Valorant practice. Our team coordination has improved, but we still struggle during site retakes.\r\n\r\nRyan: Agreed. We should practice utility usage, especially smokes and flashes.\r\n\r\nMaya: Also, communication needs to be faster during pushes.\r\n\r\nAlex: Good points. Let’s schedule two scrims this week to improve teamwork.",
+  "meeting_summary": "The team discussed improvements in coordination during Valorant practice, identified challenges during site retakes, and emphasized the need for better utility usage and communication.",
+  "key_decisions": [
+    "Schedule two scrims this week to improve teamwork."
+  ],
+  "action_items": [
+    {
+      "task": "Schedule scrims for practice",
+      "owner": "Alex",
+      "deadline": "This week"
+    }
+  ],
+  "deadlines": [
+    "This week"
+  ],
+  "risks": [
+    "Struggles during site retakes",
+    "Slow communication during pushes"
+  ]
+}

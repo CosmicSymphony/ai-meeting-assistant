@@ -1,0 +1,32 @@
+{
+  "meeting_title": "Auto-generated meeting",
+  "meeting_date": "2026-03-11",
+  "meeting_timestamp": "2026-03-11 13:36:25",
+  "participants": [],
+  "transcript": "John: We will launch the new website next Monday.\r\n\r\nSarah: I will prepare the marketing email.\r\n\r\nDavid: Pricing must be finalized by Friday.\r\n\r\nJohn: Good. Let's meet again next week.",
+  "meeting_summary": "The team discussed the launch of the new website scheduled for next Monday, along with tasks related to marketing and pricing.",
+  "key_decisions": [
+    "Launch the new website next Monday",
+    "Finalize pricing by Friday"
+  ],
+  "action_items": [
+    {
+      "task": "Prepare the marketing email",
+      "owner": "Sarah",
+      "deadline": "next Monday"
+    },
+    {
+      "task": "Finalize pricing",
+      "owner": "David",
+      "deadline": "Friday"
+    }
+  ],
+  "deadlines": [
+    "next Monday",
+    "Friday"
+  ],
+  "risks": [
+    "Potential delays in pricing finalization",
+    "Issues with marketing email timing"
+  ]
+}

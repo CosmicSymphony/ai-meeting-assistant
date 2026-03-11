@@ -1,0 +1,69 @@
+from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from app.services.summarize_service import summarize_meeting
+from app.services.ask_meetings_service import ask_meetings
+from app.schemas.email_schemas import (
+    GenerateFollowupEmailRequest,
+    GenerateLatestFollowupEmailRequest,
+    GenerateFollowupEmailResponse,
+)
+from app.services.email_generation_service import (
+    generate_followup_email,
+    generate_followup_email_latest,
+)
+
+
+app = FastAPI()
+
+
+class MeetingQuestionRequest(BaseModel):
+    question: str
+
+
+@app.post("/generate_followup_email", response_model=GenerateFollowupEmailResponse)
+def generate_followup_email_endpoint(request: GenerateFollowupEmailRequest):
+    try:
+        result = generate_followup_email(
+            meeting_file=request.meeting_file,
+            tone=request.tone,
+            audience=request.audience,
+            signature=request.signature
+        )
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate_followup_email_latest", response_model=GenerateFollowupEmailResponse)
+def generate_followup_email_latest_endpoint(request: GenerateLatestFollowupEmailRequest):
+    try:
+        result = generate_followup_email_latest(
+            tone=request.tone,
+            audience=request.audience,
+            signature=request.signature
+        )
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/summarize")
+async def summarize(file: UploadFile):
+    content = await file.read()
+    transcript = content.decode("utf-8")
+    result = summarize_meeting(transcript)
+    return result
+
+
+@app.post("/ask_meetings")
+def ask_saved_meetings(request: MeetingQuestionRequest):
+    return ask_meetings(request.question)
