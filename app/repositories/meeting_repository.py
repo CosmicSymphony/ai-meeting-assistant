@@ -1,134 +1,197 @@
+import os
 import json
-from pathlib import Path
+from typing import List, Dict, Any, Optional
 
-OUTPUTS_DIR = Path("outputs")
-
-
-def _load_json_file(file_path: Path):
-    with file_path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+OUTPUT_DIR = "outputs"
 
 
-def _normalize_meeting(data, source_file: str = "") -> dict:
-    if isinstance(data, list):
-        if not data:
-            raise ValueError(f"Meeting file is empty: {source_file}")
-        meeting = data[0]
-    elif isinstance(data, dict):
-        meeting = data
-    else:
-        raise ValueError(f"Unsupported meeting JSON structure in file: {source_file}")
-
-    if source_file:
-        meeting["_source_file"] = source_file
-
-    return meeting
-
-
-def get_recent_meetings(limit: int = 10) -> list:
-    if not OUTPUTS_DIR.exists():
+def _list_meeting_files() -> List[str]:
+    if not os.path.exists(OUTPUT_DIR):
         return []
 
-    json_files = sorted(
-        OUTPUTS_DIR.glob("*.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True
-    )
+    files = [
+        f for f in os.listdir(OUTPUT_DIR)
+        if f.startswith("meeting_summary") and f.endswith(".json")
+    ]
+    files.sort(reverse=True)
+    return files
 
+
+def _build_file_path(filename: str) -> str:
+    return os.path.join(OUTPUT_DIR, filename)
+
+
+def _load_json_file(path: str) -> Optional[Dict[str, Any]]:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if "saved_to" not in data:
+            data["saved_to"] = path
+
+        if "source_file" not in data:
+            data["source_file"] = os.path.basename(path)
+
+        return data
+    except Exception:
+        return None
+
+
+def load_meeting_from_file(filename: str) -> Optional[Dict[str, Any]]:
+    """
+    Public function expected by older services.
+    Accepts a filename like 'meeting_summary_....json'
+    """
+    path = _build_file_path(filename)
+    return _load_json_file(path)
+
+
+def get_all_meetings() -> List[Dict[str, Any]]:
     meetings = []
 
-    for file_path in json_files[:limit]:
-        try:
-            data = _load_json_file(file_path)
-            meeting = _normalize_meeting(data, str(file_path))
-            meetings.append(meeting)
-        except Exception:
-            continue
+    for filename in _list_meeting_files():
+        data = load_meeting_from_file(filename)
+        if data:
+            meetings.append(data)
 
     return meetings
 
 
-def get_latest_meeting_file() -> str:
-    if not OUTPUTS_DIR.exists():
-        raise FileNotFoundError("Outputs folder not found.")
+def get_recent_meetings(limit: int = 10) -> List[Dict[str, Any]]:
+    meetings = []
 
-    json_files = sorted(
-        OUTPUTS_DIR.glob("*.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True
-    )
+    for filename in _list_meeting_files()[:limit]:
+        data = load_meeting_from_file(filename)
+        if not data:
+            continue
 
-    if not json_files:
-        raise FileNotFoundError("No meeting JSON files found in outputs folder.")
+        meetings.append({
+            "title": data.get("meeting_title", "Untitled Meeting"),
+            "date": data.get("meeting_date", ""),
+            "timestamp": data.get("meeting_timestamp", ""),
+            "file": filename,
+            "saved_to": data.get("saved_to", ""),
+        })
 
-    return str(json_files[0])
+    return meetings
 
 
-def search_meetings_by_person(person: str, meetings: list) -> list:
-    person_lower = person.lower()
-    matched = []
+def get_latest_meeting() -> Optional[Dict[str, Any]]:
+    files = _list_meeting_files()
+    if not files:
+        return None
 
-    for meeting in meetings:
+    return load_meeting_from_file(files[0])
+
+
+def get_latest_meeting_file() -> Optional[str]:
+    """
+    Backward-compatible helper in case older services want the newest filename.
+    """
+    files = _list_meeting_files()
+    if not files:
+        return None
+    return files[0]
+
+
+def search_meetings_by_person(person_name: str) -> List[Dict[str, Any]]:
+    results = []
+    person_name_lower = person_name.strip().lower()
+
+    for meeting in get_all_meetings():
         participants = meeting.get("participants", [])
-        transcript = meeting.get("transcript", "")
-        meeting_summary = meeting.get("meeting_summary", "")
+        participant_names = [str(p).strip().lower() for p in participants]
+
         action_items = meeting.get("action_items", [])
-
-        participant_match = any(
-            person_lower in str(participant).lower()
-            for participant in participants
-        )
-
-        transcript_match = person_lower in transcript.lower()
-        summary_match = person_lower in meeting_summary.lower()
-
-        action_item_match = any(
-            person_lower in str(item.get("owner", "")).lower()
-            if isinstance(item, dict) else person_lower in str(item).lower()
+        action_item_owners = [
+            str(item.get("owner", "")).strip().lower()
             for item in action_items
-        )
-
-        if participant_match or transcript_match or summary_match or action_item_match:
-            matched.append(meeting)
-
-    return matched
-
-
-def search_meetings_by_keywords(keywords: list, meetings: list) -> list:
-    matched = []
-
-    for meeting in meetings:
-        searchable_parts = [
-            str(meeting.get("meeting_title", "")),
-            str(meeting.get("meeting_summary", "")),
-            str(meeting.get("transcript", "")),
-            " ".join(meeting.get("key_decisions", [])),
-            " ".join(meeting.get("deadlines", [])),
-            " ".join(meeting.get("risks", [])),
+            if isinstance(item, dict)
         ]
 
+        if (
+            person_name_lower in participant_names
+            or person_name_lower in action_item_owners
+        ):
+            results.append(meeting)
+
+    return results
+
+
+def search_meetings_by_keyword(keyword: str) -> List[Dict[str, Any]]:
+    results = []
+    keyword_lower = keyword.strip().lower()
+
+    for meeting in get_all_meetings():
+        searchable_parts = [
+            meeting.get("meeting_title", ""),
+            meeting.get("meeting_summary", ""),
+            " ".join(meeting.get("key_decisions", [])),
+            " ".join(meeting.get("risks", [])),
+            " ".join(
+                [
+                    item.get("task", "")
+                    for item in meeting.get("action_items", [])
+                    if isinstance(item, dict)
+                ]
+            ),
+            " ".join(meeting.get("participants", [])),
+        ]
+
+        full_text = " ".join([str(part) for part in searchable_parts]).lower()
+
+        if keyword_lower in full_text:
+            results.append(meeting)
+
+    return results
+
+
+def search_meetings_by_keywords(keyword: str) -> List[Dict[str, Any]]:
+    """
+    Backward-compatible alias for older imports using plural naming.
+    """
+    return search_meetings_by_keyword(keyword)
+
+
+def search_meetings(query: str) -> List[Dict[str, Any]]:
+    results = []
+    query_lower = query.strip().lower()
+
+    for meeting in get_all_meetings():
         action_items = meeting.get("action_items", [])
-        for item in action_items:
-            if isinstance(item, dict):
-                searchable_parts.append(str(item.get("task", "")))
-                searchable_parts.append(str(item.get("owner", "")))
-                searchable_parts.append(str(item.get("deadline", "")))
-            else:
-                searchable_parts.append(str(item))
 
-        searchable_text = " ".join(searchable_parts).lower()
+        searchable_parts = [
+            meeting.get("meeting_title", ""),
+            meeting.get("meeting_summary", ""),
+            " ".join(meeting.get("key_decisions", [])),
+            " ".join(meeting.get("risks", [])),
+            " ".join(meeting.get("participants", [])),
+            " ".join(
+                [
+                    item.get("task", "")
+                    for item in action_items
+                    if isinstance(item, dict)
+                ]
+            ),
+            " ".join(
+                [
+                    item.get("owner", "")
+                    for item in action_items
+                    if isinstance(item, dict)
+                ]
+            ),
+            " ".join(
+                [
+                    item.get("deadline", "")
+                    for item in action_items
+                    if isinstance(item, dict)
+                ]
+            ),
+        ]
 
-        if any(keyword.lower() in searchable_text for keyword in keywords):
-            matched.append(meeting)
+        full_text = " ".join([str(part) for part in searchable_parts]).lower()
 
-    return matched
+        if query_lower in full_text:
+            results.append(meeting)
 
-
-def load_meeting_from_file(meeting_file: str) -> dict:
-    path = Path(meeting_file)
-
-    if not path.exists():
-        raise FileNotFoundError(f"Meeting file not found: {meeting_file}")
-
-    data = _load_json_file(path)
-    return _normalize_meeting(data, str(path))
+    return results

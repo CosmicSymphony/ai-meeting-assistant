@@ -1,5 +1,7 @@
 from fastapi import FastAPI, UploadFile
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from app.routes.web import router as web_router
 from pydantic import BaseModel
 from app.services.summarize_service import summarize_meeting
 from app.services.ask_meetings_service import ask_meetings
@@ -16,6 +18,9 @@ from app.services.email_generation_service import (
 
 app = FastAPI()
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+app.include_router(web_router, prefix="/web")
 
 class MeetingQuestionRequest(BaseModel):
     question: str

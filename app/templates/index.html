@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Meeting Assistant</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <div class="container">
+        <h1>AI Meeting Assistant</h1>
+        <p class="subtitle">Prototype UI</p>
+
+        <div class="card">
+            <h2>1. Upload Transcript and Summarize</h2>
+            <form action="/web/summarize" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".txt" required />
+                <button type="submit">Upload & Summarize</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Recent Meetings</h2>
+
+            {% if meetings %}
+                <ul>
+                {% for m in meetings %}
+                    <li>
+                        <strong>{{ m.title }}</strong>
+                        — {{ m.date }}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <p class="muted">No meetings saved yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>3. Generate Latest Follow-up Email</h2>
+            <form action="/web/generate-latest-email" method="post">
+                <input
+                    type="text"
+                    name="signature_name"
+                    placeholder="Your name for signature (optional)"
+                />
+                <button type="submit">Generate Email</button>
+            </form>
+        </div>
+
+        {% if summary_result %}
+        <div class="card result">
+            <h2>Summary Result</h2>
+
+            <p><strong>Meeting Title:</strong> {{ summary_result.meeting_title or "N/A" }}</p>
+            <p><strong>Date:</strong> {{ summary_result.meeting_date or "N/A" }}</p>
+
+            <p><strong>Participants:</strong></p>
+            {% if summary_result.participants and summary_result.participants|length > 0 %}
+            <ul>
+                {% for p in summary_result.participants %}
+                <li>{{ p }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">No participants detected.</p>
+            {% endif %}
+
+            <p><strong>Summary:</strong></p>
+            <p>{{ summary_result.meeting_summary or "No summary available." }}</p>
+
+            <p><strong>Key Decisions:</strong></p>
+            {% if summary_result.key_decisions and summary_result.key_decisions|length > 0 %}
+            <ul>
+                {% for decision in summary_result.key_decisions %}
+                <li>{{ decision }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">No key decisions found.</p>
+            {% endif %}
+
+            <p><strong>Action Items:</strong></p>
+            {% if summary_result.action_items and summary_result.action_items|length > 0 %}
+            <ul>
+                {% for item in summary_result.action_items %}
+                <li>
+                    {% if item.task is defined or item.owner is defined or item.deadline is defined %}
+                        <strong>Task:</strong> {{ item.task or "N/A" }}<br>
+                        <strong>Owner:</strong> {{ item.owner or "N/A" }}<br>
+                        <strong>Deadline:</strong> {{ item.deadline or "N/A" }}
+                    {% else %}
+                        {{ item }}
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">No action items found.</p>
+            {% endif %}
+
+            <p><strong>Risks:</strong></p>
+            {% if summary_result.risks and summary_result.risks|length > 0 %}
+            <ul>
+                {% for risk in summary_result.risks %}
+                <li>{{ risk }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted">No risks found.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if ask_result %}
+        <div class="card result">
+            <h2>Ask Meetings Result</h2>
+
+            {% if ask_result is string %}
+            <pre>{{ ask_result }}</pre>
+            {% else %}
+            <pre>{{ ask_result | tojson(indent=2) }}</pre>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if email_result %}
+        <div class="card result">
+            <h2>Generated Follow-up Email</h2>
+
+            {% if email_result is string %}
+            <pre>{{ email_result }}</pre>
+            {% else %}
+            <pre>{{ email_result | tojson(indent=2) }}</pre>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="card error">
+            <h2>Error</h2>
+            <pre>{{ error }}</pre>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
