@@ -1,197 +1,180 @@
-import os
+from __future__ import annotations
+
 import json
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-OUTPUT_DIR = "outputs"
-
-
-def _list_meeting_files() -> List[str]:
-    if not os.path.exists(OUTPUT_DIR):
-        return []
-
-    files = [
-        f for f in os.listdir(OUTPUT_DIR)
-        if f.startswith("meeting_summary") and f.endswith(".json")
-    ]
-    files.sort(reverse=True)
-    return files
-
-
-def _build_file_path(filename: str) -> str:
-    return os.path.join(OUTPUT_DIR, filename)
-
-
-def _load_json_file(path: str) -> Optional[Dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        if "saved_to" not in data:
-            data["saved_to"] = path
-
-        if "source_file" not in data:
-            data["source_file"] = os.path.basename(path)
-
-        return data
-    except Exception:
-        return None
+OUTPUTS_DIR = Path("outputs")
 
 
 def load_meeting_from_file(filename: str) -> Optional[Dict[str, Any]]:
     """
-    Public function expected by older services.
-    Accepts a filename like 'meeting_summary_....json'
+    Load one saved meeting JSON file from the outputs folder.
     """
-    path = _build_file_path(filename)
-    return _load_json_file(path)
+    file_path = OUTPUTS_DIR / filename
+
+    if not file_path.exists() or not file_path.is_file():
+        return None
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict):
+            data["_file"] = filename
+            data["_source_file"] = filename
+
+        return data
+
+    except Exception:
+        return None
+
+
+def get_meeting_by_file(filename: str) -> Optional[Dict[str, Any]]:
+    """
+    Public helper for loading one meeting by filename.
+    """
+    return load_meeting_from_file(filename)
 
 
 def get_all_meetings() -> List[Dict[str, Any]]:
-    meetings = []
+    """
+    Load all meeting JSON files from outputs folder.
+    Sorted by newest modified first.
+    """
+    if not OUTPUTS_DIR.exists():
+        return []
 
-    for filename in _list_meeting_files():
-        data = load_meeting_from_file(filename)
-        if data:
-            meetings.append(data)
+    meetings: List[Dict[str, Any]] = []
 
-    return meetings
+    json_files = sorted(
+        OUTPUTS_DIR.glob("*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
 
+    for file_path in json_files:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-def get_recent_meetings(limit: int = 10) -> List[Dict[str, Any]]:
-    meetings = []
+            if isinstance(data, dict):
+                data["_file"] = file_path.name
+                data["_source_file"] = file_path.name
+                meetings.append(data)
 
-    for filename in _list_meeting_files()[:limit]:
-        data = load_meeting_from_file(filename)
-        if not data:
+        except Exception:
             continue
 
-        meetings.append({
-            "title": data.get("meeting_title", "Untitled Meeting"),
-            "date": data.get("meeting_date", ""),
-            "timestamp": data.get("meeting_timestamp", ""),
-            "file": filename,
-            "saved_to": data.get("saved_to", ""),
-        })
-
     return meetings
 
 
-def get_latest_meeting() -> Optional[Dict[str, Any]]:
-    files = _list_meeting_files()
-    if not files:
-        return None
-
-    return load_meeting_from_file(files[0])
-
-
-def get_latest_meeting_file() -> Optional[str]:
+def get_recent_meetings(limit: int = 5) -> List[Dict[str, Any]]:
     """
-    Backward-compatible helper in case older services want the newest filename.
+    Return the most recent meetings.
+
+    Keeps the FULL meeting objects because other services depend on fields like:
+    - meeting_title
+    - participants
+    - meeting_summary
+    - transcript
     """
-    files = _list_meeting_files()
-    if not files:
-        return None
-    return files[0]
+    meetings = get_all_meetings()
+    return meetings[:limit]
 
 
-def search_meetings_by_person(person_name: str) -> List[Dict[str, Any]]:
-    results = []
-    person_name_lower = person_name.strip().lower()
+def get_latest_meeting_file() -> str:
+    """
+    Return the newest meeting filename.
+    """
+    meetings = get_all_meetings()
 
-    for meeting in get_all_meetings():
-        participants = meeting.get("participants", [])
-        participant_names = [str(p).strip().lower() for p in participants]
+    if not meetings:
+        raise FileNotFoundError("No meeting files found.")
 
-        action_items = meeting.get("action_items", [])
-        action_item_owners = [
-            str(item.get("owner", "")).strip().lower()
-            for item in action_items
+    return meetings[0]["_file"]
+
+
+def search_meetings_by_person(
+    person_name: str,
+    meetings: Optional[List[Dict[str, Any]]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Search meetings by participant name.
+    """
+    if not person_name:
+        return []
+
+    if meetings is None:
+        meetings = get_all_meetings()
+
+    target = person_name.strip().lower()
+
+    matches: List[Dict[str, Any]] = []
+
+    for meeting in meetings:
+
+        participants = meeting.get("participants", []) or []
+
+        if any(target in str(p).lower() for p in participants):
+            matches.append(meeting)
+            continue
+
+        searchable_text = " ".join([
+            str(meeting.get("meeting_title", "")),
+            str(meeting.get("meeting_summary", "")),
+            str(meeting.get("transcript", "")),
+        ]).lower()
+
+        if target in searchable_text:
+            matches.append(meeting)
+
+    return matches
+
+
+def search_meetings_by_keywords(
+    keywords: List[str],
+    meetings: Optional[List[Dict[str, Any]]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Search meetings by keywords across title, summary,
+    decisions, risks, action items and transcript.
+    """
+    if not keywords:
+        return []
+
+    if meetings is None:
+        meetings = get_all_meetings()
+
+    normalized_keywords = [
+        kw.strip().lower()
+        for kw in keywords
+        if kw and kw.strip()
+    ]
+
+    matches: List[Dict[str, Any]] = []
+
+    for meeting in meetings:
+
+        action_items = meeting.get("action_items", []) or []
+
+        action_items_text = " ".join(
+            f"{item.get('task','')} {item.get('owner','')} {item.get('deadline','')}"
             if isinstance(item, dict)
-        ]
+            else str(item)
+            for item in action_items
+        )
 
-        if (
-            person_name_lower in participant_names
-            or person_name_lower in action_item_owners
-        ):
-            results.append(meeting)
+        searchable_text = " ".join([
+            str(meeting.get("meeting_title", "")),
+            str(meeting.get("meeting_summary", "")),
+            " ".join(str(x) for x in meeting.get("key_decisions", [])),
+            " ".join(str(x) for x in meeting.get("risks", [])),
+            action_items_text,
+            str(meeting.get("transcript", "")),
+        ]).lower()
 
-    return results
+        if any(keyword in searchable_text for keyword in normalized_keywords):
+            matches.append(meeting)
 
-
-def search_meetings_by_keyword(keyword: str) -> List[Dict[str, Any]]:
-    results = []
-    keyword_lower = keyword.strip().lower()
-
-    for meeting in get_all_meetings():
-        searchable_parts = [
-            meeting.get("meeting_title", ""),
-            meeting.get("meeting_summary", ""),
-            " ".join(meeting.get("key_decisions", [])),
-            " ".join(meeting.get("risks", [])),
-            " ".join(
-                [
-                    item.get("task", "")
-                    for item in meeting.get("action_items", [])
-                    if isinstance(item, dict)
-                ]
-            ),
-            " ".join(meeting.get("participants", [])),
-        ]
-
-        full_text = " ".join([str(part) for part in searchable_parts]).lower()
-
-        if keyword_lower in full_text:
-            results.append(meeting)
-
-    return results
-
-
-def search_meetings_by_keywords(keyword: str) -> List[Dict[str, Any]]:
-    """
-    Backward-compatible alias for older imports using plural naming.
-    """
-    return search_meetings_by_keyword(keyword)
-
-
-def search_meetings(query: str) -> List[Dict[str, Any]]:
-    results = []
-    query_lower = query.strip().lower()
-
-    for meeting in get_all_meetings():
-        action_items = meeting.get("action_items", [])
-
-        searchable_parts = [
-            meeting.get("meeting_title", ""),
-            meeting.get("meeting_summary", ""),
-            " ".join(meeting.get("key_decisions", [])),
-            " ".join(meeting.get("risks", [])),
-            " ".join(meeting.get("participants", [])),
-            " ".join(
-                [
-                    item.get("task", "")
-                    for item in action_items
-                    if isinstance(item, dict)
-                ]
-            ),
-            " ".join(
-                [
-                    item.get("owner", "")
-                    for item in action_items
-                    if isinstance(item, dict)
-                ]
-            ),
-            " ".join(
-                [
-                    item.get("deadline", "")
-                    for item in action_items
-                    if isinstance(item, dict)
-                ]
-            ),
-        ]
-
-        full_text = " ".join([str(part) for part in searchable_parts]).lower()
-
-        if query_lower in full_text:
-            results.append(meeting)
-
-    return results
+    return matches

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Detail</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <section class="card">
+            <p><a href="/web/">← Back to Home</a></p>
+
+            <h1>{{ meeting.meeting_title or "Untitled Meeting" }}</h1>
+            <p><strong>Date:</strong> {{ meeting.meeting_date or "N/A" }}</p>
+            <p><strong>Timestamp:</strong> {{ meeting.meeting_timestamp or "N/A" }}</p>
+        </section>
+
+        <section class="card">
+            <h2>Participants</h2>
+            {% if meeting.participants and meeting.participants|length > 0 %}
+                <ul>
+                    {% for p in meeting.participants %}
+                        <li>{{ p }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No participants detected.</p>
+            {% endif %}
+        </section>
+
+        <section class="card">
+            <h2>Summary</h2>
+            <p>{{ meeting.meeting_summary or "No summary available." }}</p>
+        </section>
+
+        <section class="card">
+            <h2>Key Decisions</h2>
+            {% if meeting.key_decisions and meeting.key_decisions|length > 0 %}
+                <ul>
+                    {% for decision in meeting.key_decisions %}
+                        <li>{{ decision }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No key decisions found.</p>
+            {% endif %}
+        </section>
+
+        <section class="card">
+            <h2>Action Items</h2>
+            {% if meeting.action_items and meeting.action_items|length > 0 %}
+                <ul>
+                    {% for item in meeting.action_items %}
+                        <li>
+                            <strong>Task:</strong> {{ item.task or "N/A" }}<br>
+                            <strong>Owner:</strong> {{ item.owner or "N/A" }}<br>
+                            <strong>Deadline:</strong> {{ item.deadline or "N/A" }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No action items found.</p>
+            {% endif %}
+        </section>
+
+        <section class="card">
+            <h2>Ask About This Meeting</h2>
+
+            <form method="post" action="/web/meeting/{{ meeting._file }}/ask">
+                <input
+                    type="text"
+                    name="question"
+                    placeholder="Ask a question about this meeting..."
+                    value="{{ question or '' }}"
+                    required
+                    style="width: 70%; padding: 10px; border: 1px solid #ccc; border-radius: 8px;"
+                >
+                <button
+                    type="submit"
+                    style="padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer;"
+                >
+                    Ask
+                </button>
+            </form>
+
+            {% if answer %}
+                <div style="margin-top: 16px;">
+                    <p><strong>Question:</strong> {{ question }}</p>
+                    <p><strong>Answer:</strong> {{ answer }}</p>
+                </div>
+            {% endif %}
+
+            {% if meeting_error %}
+                <div style="margin-top: 16px; color: red;">
+                    <strong>Error:</strong> {{ meeting_error }}
+                </div>
+            {% endif %}
+        </section>
+
+        {% if meeting.transcript %}
+        <section class="card">
+            <h2>Transcript</h2>
+            <pre>{{ meeting.transcript }}</pre>
+        </section>
+        {% endif %}
+    </div>
+</body>
+</html>

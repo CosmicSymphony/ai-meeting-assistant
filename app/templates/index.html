@@ -1,146 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Meeting Assistant</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
         <h1>AI Meeting Assistant</h1>
-        <p class="subtitle">Prototype UI</p>
 
-        <div class="card">
-            <h2>1. Upload Transcript and Summarize</h2>
+        <section class="card">
+            <h2>Upload Transcript</h2>
             <form action="/web/summarize" method="post" enctype="multipart/form-data">
-                <input type="file" name="file" accept=".txt" required />
-                <button type="submit">Upload & Summarize</button>
+                <input type="file" name="file" accept=".txt" required>
+                <button type="submit">Summarize Meeting</button>
             </form>
-        </div>
+        </section>
 
-        <div class="card">
-            <h2>Recent Meetings</h2>
-
-            {% if meetings %}
-                <ul>
-                {% for m in meetings %}
-                    <li>
-                        <strong>{{ m.title }}</strong>
-                        — {{ m.date }}
-                    </li>
-                {% endfor %}
-                </ul>
-            {% else %}
-                <p class="muted">No meetings saved yet.</p>
-            {% endif %}
-        </div>
-
-        <div class="card">
-            <h2>3. Generate Latest Follow-up Email</h2>
-            <form action="/web/generate-latest-email" method="post">
+        <section class="card">
+            <h2>Ask Across Past Meetings</h2>
+            <form action="/web/ask" method="post">
                 <input
                     type="text"
-                    name="signature_name"
-                    placeholder="Your name for signature (optional)"
-                />
+                    name="question"
+                    placeholder="Ask a question across all saved meetings..."
+                    required
+                >
+                <button type="submit">Ask</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Generate Email for Latest Meeting</h2>
+            <form action="/web/generate-latest-email" method="post">
                 <button type="submit">Generate Email</button>
             </form>
-        </div>
+        </section>
+
+<section class="card">
+    <h2>Recent Meetings</h2>
+
+    {% if meetings %}
+        <ul>
+            {% for m in meetings %}
+                <li>
+                    <a href="/web/meeting/{{ m._file }}">{{ m.meeting_title or "Untitled Meeting" }}</a>
+                    — {{ m.meeting_date or "N/A" }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No meetings saved yet.</p>
+    {% endif %}
+</section>
 
         {% if summary_result %}
-        <div class="card result">
+        <section class="card">
             <h2>Summary Result</h2>
 
-            <p><strong>Meeting Title:</strong> {{ summary_result.meeting_title or "N/A" }}</p>
-            <p><strong>Date:</strong> {{ summary_result.meeting_date or "N/A" }}</p>
-
-            <p><strong>Participants:</strong></p>
-            {% if summary_result.participants and summary_result.participants|length > 0 %}
-            <ul>
-                {% for p in summary_result.participants %}
-                <li>{{ p }}</li>
-                {% endfor %}
-            </ul>
+            {% if summary_result.error %}
+                <p><strong>Error:</strong> {{ summary_result.error }}</p>
             {% else %}
-            <p class="muted">No participants detected.</p>
-            {% endif %}
+                <p><strong>Title:</strong> {{ summary_result.meeting_title or "N/A" }}</p>
+                <p><strong>Date:</strong> {{ summary_result.meeting_date or "N/A" }}</p>
+                <p><strong>Summary:</strong> {{ summary_result.meeting_summary or "N/A" }}</p>
 
-            <p><strong>Summary:</strong></p>
-            <p>{{ summary_result.meeting_summary or "No summary available." }}</p>
+                <h3>Participants</h3>
+                {% if summary_result.participants %}
+                    <ul>
+                        {% for p in summary_result.participants %}
+                            <li>{{ p }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No participants detected.</p>
+                {% endif %}
 
-            <p><strong>Key Decisions:</strong></p>
-            {% if summary_result.key_decisions and summary_result.key_decisions|length > 0 %}
-            <ul>
-                {% for decision in summary_result.key_decisions %}
-                <li>{{ decision }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">No key decisions found.</p>
-            {% endif %}
+                <h3>Key Decisions</h3>
+                {% if summary_result.key_decisions %}
+                    <ul>
+                        {% for d in summary_result.key_decisions %}
+                            <li>{{ d }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No key decisions found.</p>
+                {% endif %}
 
-            <p><strong>Action Items:</strong></p>
-            {% if summary_result.action_items and summary_result.action_items|length > 0 %}
-            <ul>
-                {% for item in summary_result.action_items %}
-                <li>
-                    {% if item.task is defined or item.owner is defined or item.deadline is defined %}
-                        <strong>Task:</strong> {{ item.task or "N/A" }}<br>
-                        <strong>Owner:</strong> {{ item.owner or "N/A" }}<br>
-                        <strong>Deadline:</strong> {{ item.deadline or "N/A" }}
-                    {% else %}
-                        {{ item }}
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">No action items found.</p>
-            {% endif %}
+                <h3>Action Items</h3>
+                {% if summary_result.action_items %}
+                    <ul>
+                        {% for item in summary_result.action_items %}
+                            <li>
+                                <strong>Task:</strong> {{ item.task or "N/A" }}<br>
+                                <strong>Owner:</strong> {{ item.owner or "N/A" }}<br>
+                                <strong>Deadline:</strong> {{ item.deadline or "N/A" }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No action items found.</p>
+                {% endif %}
 
-            <p><strong>Risks:</strong></p>
-            {% if summary_result.risks and summary_result.risks|length > 0 %}
-            <ul>
-                {% for risk in summary_result.risks %}
-                <li>{{ risk }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="muted">No risks found.</p>
+                <h3>Risks</h3>
+                {% if summary_result.risks %}
+                    <ul>
+                        {% for risk in summary_result.risks %}
+                            <li>{{ risk }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No risks found.</p>
+                {% endif %}
             {% endif %}
-        </div>
+        </section>
         {% endif %}
 
         {% if ask_result %}
-        <div class="card result">
-            <h2>Ask Meetings Result</h2>
+        <section class="card">
+    <h2>Ask Result</h2>
 
-            {% if ask_result is string %}
-            <pre>{{ ask_result }}</pre>
-            {% else %}
-            <pre>{{ ask_result | tojson(indent=2) }}</pre>
-            {% endif %}
-        </div>
+    {% if ask_result.error %}
+        <p><strong>Error:</strong> {{ ask_result.error }}</p>
+    {% else %}
+        <p><strong>Answer:</strong> {{ ask_result.answer }}</p>
+        <p><strong>Matched Meetings:</strong> {{ ask_result.matched_meetings_count }}</p>
+    {% endif %}
+</section>
         {% endif %}
 
         {% if email_result %}
-        <div class="card result">
-            <h2>Generated Follow-up Email</h2>
+        <section class="card">
+            <h2>Email Result</h2>
 
-            {% if email_result is string %}
-            <pre>{{ email_result }}</pre>
+            {% if email_result.error %}
+                <p><strong>Error:</strong> {{ email_result.error }}</p>
             {% else %}
-            <pre>{{ email_result | tojson(indent=2) }}</pre>
+                <pre>{{ email_result }}</pre>
             {% endif %}
-        </div>
-        {% endif %}
-
-        {% if error %}
-        <div class="card error">
-            <h2>Error</h2>
-            <pre>{{ error }}</pre>
-        </div>
+        </section>
         {% endif %}
     </div>
 </body>

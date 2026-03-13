@@ -75,8 +75,7 @@ Required JSON structure:
       "owner": "string",
       "deadline": "string"
     }}
-  ],
-  "risks": ["string"]
+  ]
 }}
 
 Rules:
