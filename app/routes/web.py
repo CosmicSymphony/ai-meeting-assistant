@@ -76,6 +76,25 @@ async def transcribe_audio_file(request: Request, file: UploadFile = File(...)):
         return render_page(request, error=str(e))
 
 
+@router.post("/transcribe-only", response_class=HTMLResponse)
+async def transcribe_only(request: Request, file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+
+        if len(content) > 25 * 1024 * 1024:
+            return render_page(request, error="File too large. Maximum size is 25MB.")
+
+        transcript_text = transcribe_audio(content, file.filename)
+        meetings = get_recent_meetings()
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "transcript_preview": transcript_text,
+            "meetings": meetings,
+        })
+    except Exception as e:
+        return render_page(request, error=str(e))
+
+
 @router.post("/ask", response_class=HTMLResponse)
 async def ask_question(request: Request, question: str = Form(...)):
     try:

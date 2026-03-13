@@ -27,8 +27,20 @@
                 <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
                 <button type="submit">Transcribe &amp; Summarize</button>
             </form>
+            <form action="/web/transcribe-only" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-audio', this)" style="margin-top: 8px;">
+                <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
+                <button type="submit" style="background: #6b7280;">Preview Transcript Only</button>
+            </form>
             <p id="loading-audio" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Transcribing audio... this may take a moment.</p>
         </section>
+
+        {% if transcript_preview %}
+        <section class="card">
+            <h2>Transcript Preview</h2>
+            <p style="color: #6b7280; font-size: 13px;">This is the raw text Whisper extracted from your audio. If it looks correct, use <strong>Transcribe &amp; Summarize</strong> to process it.</p>
+            <pre>{{ transcript_preview }}</pre>
+        </section>
+        {% endif %}
 
         <section class="card">
             <h2>Ask Across Past Meetings</h2>
