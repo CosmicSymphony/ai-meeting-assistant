@@ -57,14 +57,14 @@ async def summarize_transcript(request: Request, file: UploadFile = File(...)):
 
 
 @router.post("/transcribe-audio", response_class=HTMLResponse)
-async def transcribe_audio_file(request: Request, file: UploadFile = File(...), language: str = Form(default="")):
+async def transcribe_audio_file(request: Request, file: UploadFile = File(...)):
     try:
         content = await file.read()
 
         if len(content) > 25 * 1024 * 1024:
             return render_page(request, error="File too large. Maximum size is 25MB.")
 
-        transcript_text, _ = transcribe_audio(content, file.filename, language=language or None)
+        transcript_text, _ = transcribe_audio(content, file.filename)
         result = summarize_meeting(transcript_text)
 
         if isinstance(result, str):
@@ -77,14 +77,14 @@ async def transcribe_audio_file(request: Request, file: UploadFile = File(...), 
 
 
 @router.post("/transcribe-only", response_class=HTMLResponse)
-async def transcribe_only(request: Request, file: UploadFile = File(...), language: str = Form(default="")):
+async def transcribe_only(request: Request, file: UploadFile = File(...)):
     try:
         content = await file.read()
 
         if len(content) > 25 * 1024 * 1024:
             return render_page(request, error="File too large. Maximum size is 25MB.")
 
-        transcript_text, detected_language = transcribe_audio(content, file.filename, language=language or None)
+        transcript_text, detected_language = transcribe_audio(content, file.filename)
         meetings = get_recent_meetings()
         return templates.TemplateResponse("index.html", {
             "request": request,
