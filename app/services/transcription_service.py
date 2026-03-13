@@ -21,6 +21,7 @@ def transcribe_audio(file_bytes: bytes, filename: str) -> str:
     response = client.audio.transcriptions.create(
         model="whisper-1",
         file=(filename, file_bytes),
+        language="en",
     )
 
     return response.text.strip()
