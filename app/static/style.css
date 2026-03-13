@@ -55,6 +55,15 @@ button:hover {
     background: #1d4ed8;
 }
 
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: #f9fafb;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
 .result pre,
 .error pre {
     white-space: pre-wrap;
