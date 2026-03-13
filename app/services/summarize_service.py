@@ -72,6 +72,7 @@ def build_summary_prompt(transcript_text: str) -> str:
 You are an intelligent AI meeting assistant.
 
 Analyze the meeting transcript below and return ONLY valid JSON.
+Always respond in English regardless of the language of the transcript.
 Do not include markdown.
 Do not include triple backticks.
 Do not include any explanation outside JSON.
