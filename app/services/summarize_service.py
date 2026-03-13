@@ -148,6 +148,8 @@ def summarize_meeting(transcript_text: str):
     else:
         summary_data = raw_result
 
+    summary_data["transcript"] = transcript_text
+
     # Prefer deterministic participant extraction if found
     if detected_participants:
         summary_data["participants"] = detected_participants
