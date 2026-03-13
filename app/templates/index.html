@@ -23,12 +23,27 @@
         <section class="card">
             <h2>Upload Audio Recording</h2>
             <p style="color: #6b7280; font-size: 13px; margin-top: 0;">Upload a meeting recording — transcribed automatically using Whisper AI. Supports <strong>mp3, mp4, wav, m4a, webm</strong> (max 25MB)</p>
-            <form action="/web/transcribe-audio" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-audio', this)">
+            <label style="font-size: 13px; font-weight: bold;">Language</label>
+            <select id="lang-select" style="display: block; margin: 6px 0 14px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px;">
+                <option value="">Auto-detect</option>
+                <option value="en">English</option>
+                <option value="ms">Malay</option>
+                <option value="zh">Chinese</option>
+                <option value="ar">Arabic</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="ja">Japanese</option>
+                <option value="ko">Korean</option>
+                <option value="es">Spanish</option>
+            </select>
+            <form id="form-summarize-audio" action="/web/transcribe-audio" method="post" enctype="multipart/form-data" onsubmit="injectLang('form-summarize-audio'); showLoading('loading-audio', this)">
                 <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
+                <input type="hidden" name="language" value="">
                 <button type="submit">Transcribe &amp; Summarize</button>
             </form>
-            <form action="/web/transcribe-only" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-audio', this)" style="margin-top: 8px;">
+            <form id="form-preview-audio" action="/web/transcribe-only" method="post" enctype="multipart/form-data" onsubmit="injectLang('form-preview-audio'); showLoading('loading-audio', this)" style="margin-top: 8px;">
                 <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
+                <input type="hidden" name="language" value="">
                 <button type="submit" style="background: #6b7280;">Preview Transcript Only</button>
             </form>
             <p id="loading-audio" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Transcribing audio... this may take a moment.</p>
@@ -37,7 +52,12 @@
         {% if transcript_preview %}
         <section class="card">
             <h2>Transcript Preview</h2>
-            <p style="color: #6b7280; font-size: 13px;">This is the raw text Whisper extracted from your audio. If it looks correct, use <strong>Transcribe &amp; Summarize</strong> to process it.</p>
+            <p style="color: #6b7280; font-size: 13px;">
+                This is the raw text Whisper extracted from your audio. If it looks correct, use <strong>Transcribe &amp; Summarize</strong> to process it.
+                {% if detected_language %}
+                — Detected language: <strong>{{ detected_language }}</strong>
+                {% endif %}
+            </p>
             <pre>{{ transcript_preview }}</pre>
         </section>
         {% endif %}
@@ -68,6 +88,10 @@
             function showLoading(id, form) {
                 document.getElementById(id).style.display = 'block';
                 form.querySelector('button[type=submit]').disabled = true;
+            }
+            function injectLang(formId) {
+                var lang = document.getElementById('lang-select').value;
+                document.querySelector('#' + formId + ' input[name=language]').value = lang;
             }
         </script>
 
