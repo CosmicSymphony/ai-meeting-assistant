@@ -85,9 +85,9 @@
             </form>
 
             {% if answer %}
-                <div style="margin-top: 16px;">
-                    <p><strong>Question:</strong> {{ question }}</p>
-                    <p><strong>Answer:</strong> {{ answer }}</p>
+                <div style="margin-top: 20px;">
+                    <p style="margin-bottom: 8px;"><strong>Question:</strong> {{ question }}</p>
+                    <div style="background: #f9fafb; border-left: 4px solid #2563eb; border-radius: 8px; padding: 14px 18px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.7; font-size: 14px;">{{ answer }}</div>
                 </div>
             {% endif %}
 
