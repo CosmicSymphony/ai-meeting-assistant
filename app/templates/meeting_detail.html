@@ -67,7 +67,7 @@
         <section class="card">
             <h2>Ask About This Meeting</h2>
 
-            <form method="post" action="/web/meeting/{{ meeting._file }}/ask">
+            <form method="post" action="/web/meeting/{{ meeting._file }}/ask" onsubmit="showLoading(this)">
                 <input
                     type="text"
                     name="question"
@@ -83,6 +83,13 @@
                     Ask
                 </button>
             </form>
+            <p id="loading-msg" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Thinking...</p>
+            <script>
+                function showLoading(form) {
+                    document.getElementById('loading-msg').style.display = 'block';
+                    form.querySelector('button[type=submit]').disabled = true;
+                }
+            </script>
 
             {% if answer %}
                 <div style="margin-top: 20px;">

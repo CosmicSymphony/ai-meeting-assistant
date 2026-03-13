@@ -6,6 +6,14 @@ from typing import Any, Dict
 from openai import OpenAI
 from app.config import settings
 
+_client = None
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    return _client
+
 
 def ask_single_meeting_question(meeting: Dict[str, Any], question: str) -> str:
     """
@@ -34,13 +42,13 @@ Keep the answer clear and concise.
 If the answer involves action items, mention the owner and deadline when available.
 
 Meeting data:
-{json.dumps(meeting_context, indent=2)}
+{json.dumps(meeting_context)}
 
 User question:
 {question}
 """
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = _get_client()
     response = client.responses.create(
         model="gpt-4.1-mini",
         input=prompt,

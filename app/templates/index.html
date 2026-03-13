@@ -12,15 +12,16 @@
 
         <section class="card">
             <h2>Upload Transcript</h2>
-            <form action="/web/summarize" method="post" enctype="multipart/form-data">
+            <form action="/web/summarize" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-summarize', this)">
                 <input type="file" name="file" accept=".txt" required>
                 <button type="submit">Summarize Meeting</button>
             </form>
+            <p id="loading-summarize" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Summarizing...</p>
         </section>
 
         <section class="card">
             <h2>Ask Across Past Meetings</h2>
-            <form action="/web/ask" method="post">
+            <form action="/web/ask" method="post" onsubmit="showLoading('loading-ask', this)">
                 <input
                     type="text"
                     name="question"
@@ -29,14 +30,23 @@
                 >
                 <button type="submit">Ask</button>
             </form>
+            <p id="loading-ask" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Thinking...</p>
         </section>
 
         <section class="card">
             <h2>Generate Email for Latest Meeting</h2>
-            <form action="/web/generate-latest-email" method="post">
+            <form action="/web/generate-latest-email" method="post" onsubmit="showLoading('loading-email', this)">
                 <button type="submit">Generate Email</button>
             </form>
+            <p id="loading-email" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Generating email...</p>
         </section>
+
+        <script>
+            function showLoading(id, form) {
+                document.getElementById(id).style.display = 'block';
+                form.querySelector('button[type=submit]').disabled = true;
+            }
+        </script>
 
 <section class="card">
     <h2>Recent Meetings</h2>
