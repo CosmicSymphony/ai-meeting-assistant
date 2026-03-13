@@ -103,16 +103,6 @@
                     <p>No action items found.</p>
                 {% endif %}
 
-                <h3>Risks</h3>
-                {% if summary_result.risks %}
-                    <ul>
-                        {% for risk in summary_result.risks %}
-                            <li>{{ risk }}</li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>No risks found.</p>
-                {% endif %}
             {% endif %}
         </section>
         {% endif %}
