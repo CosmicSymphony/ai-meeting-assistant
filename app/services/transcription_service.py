@@ -11,7 +11,7 @@ def _get_client() -> OpenAI:
     return _client
 
 
-def transcribe_audio(file_bytes: bytes, filename: str, language: str = "en") -> tuple[str, str]:
+def transcribe_audio(file_bytes: bytes, filename: str, language: str = None) -> tuple[str, str]:
     """
     Send audio file to OpenAI Whisper and return (transcript_text, detected_language).
     Pass a BCP-47 language code (e.g. 'en', 'ms', 'zh') to override auto-detection.
