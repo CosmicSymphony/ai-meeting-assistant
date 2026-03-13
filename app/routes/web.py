@@ -8,6 +8,7 @@ from app.services.summarize_service import summarize_meeting
 from app.services.ask_meetings_service import ask_meetings
 from app.services.ask_single_meeting_service import ask_single_meeting_question
 from app.services.email_generation_service import generate_followup_email_latest
+from app.services.transcription_service import transcribe_audio
 from app.repositories.meeting_repository import get_recent_meetings, get_meeting_by_file
 
 router = APIRouter()
@@ -48,6 +49,26 @@ async def summarize_transcript(request: Request, file: UploadFile = File(...)):
         result = summarize_meeting(transcript_text)
 
         if isinstance(result, str):
+            result = json.loads(result)
+
+        return render_page(request, summary_result=result)
+    except Exception as e:
+        return render_page(request, error=str(e))
+
+
+@router.post("/transcribe-audio", response_class=HTMLResponse)
+async def transcribe_audio_file(request: Request, file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+
+        if len(content) > 25 * 1024 * 1024:
+            return render_page(request, error="File too large. Maximum size is 25MB.")
+
+        transcript_text = transcribe_audio(content, file.filename)
+        result = summarize_meeting(transcript_text)
+
+        if isinstance(result, str):
+            import json
             result = json.loads(result)
 
         return render_page(request, summary_result=result)

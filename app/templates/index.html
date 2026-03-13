@@ -12,11 +12,22 @@
 
         <section class="card">
             <h2>Upload Transcript</h2>
+            <p style="color: #6b7280; font-size: 13px; margin-top: 0;">Upload a <strong>.txt</strong> transcript file</p>
             <form action="/web/summarize" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-summarize', this)">
                 <input type="file" name="file" accept=".txt" required>
                 <button type="submit">Summarize Meeting</button>
             </form>
             <p id="loading-summarize" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Summarizing...</p>
+        </section>
+
+        <section class="card">
+            <h2>Upload Audio Recording</h2>
+            <p style="color: #6b7280; font-size: 13px; margin-top: 0;">Upload a meeting recording — transcribed automatically using Whisper AI. Supports <strong>mp3, mp4, wav, m4a, webm</strong> (max 25MB)</p>
+            <form action="/web/transcribe-audio" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-audio', this)">
+                <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
+                <button type="submit">Transcribe &amp; Summarize</button>
+            </form>
+            <p id="loading-audio" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Transcribing audio... this may take a moment.</p>
         </section>
 
         <section class="card">
