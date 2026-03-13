@@ -91,12 +91,27 @@ Transcript:
 """.strip()
 
 
+def slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_]+", "_", text)
+    return text[:50].strip("_")
+
+
 def save_summary_to_file(summary_data: dict) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    timestamp_for_filename = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"meeting_summary_{timestamp_for_filename}.json"
+    title = summary_data.get("meeting_title", "meeting")
+    date = summary_data.get("meeting_date", datetime.now().strftime("%Y-%m-%d"))
+    slug = slugify(title)
+    filename = f"{slug}_{date}.json"
+
+    # Avoid overwriting if a file with the same name already exists
     file_path = os.path.join(OUTPUT_DIR, filename)
+    if os.path.exists(file_path):
+        suffix = datetime.now().strftime("%H-%M-%S")
+        filename = f"{slug}_{date}_{suffix}.json"
+        file_path = os.path.join(OUTPUT_DIR, filename)
 
     summary_data["saved_to"] = file_path
 
