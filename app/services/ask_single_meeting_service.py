@@ -4,8 +4,7 @@ import json
 from typing import Any, Dict
 
 from openai import OpenAI
-
-client = OpenAI()
+from app.config import settings
 
 
 def ask_single_meeting_question(meeting: Dict[str, Any], question: str) -> str:
@@ -41,6 +40,7 @@ User question:
 {question}
 """
 
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
     response = client.responses.create(
         model="gpt-4.1-mini",
         input=prompt,

@@ -4,9 +4,6 @@ from app.config import settings
 
 class OpenAIProvider:
     def __init__(self):
-        print("DEBUG KEY EXISTS:", bool(settings.OPENAI_API_KEY))
-        print("DEBUG KEY PREFIX:", (settings.OPENAI_API_KEY or "")[:7])
-
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is missing. Check your .env file.")
 
