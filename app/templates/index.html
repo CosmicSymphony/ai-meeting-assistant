@@ -28,13 +28,15 @@
                 <option value="">Auto-detect</option>
                 <option value="en">English</option>
                 <option value="ms">Malay</option>
-                <option value="zh">Chinese</option>
-                <option value="ar">Arabic</option>
+                <option value="zh">Chinese (Mandarin)</option>
+                <option value="es">Spanish</option>
                 <option value="fr">French</option>
-                <option value="de">German</option>
+                <option value="ar">Arabic</option>
+                <option value="hi">Hindi</option>
+                <option value="pt">Portuguese</option>
+                <option value="id">Indonesian</option>
                 <option value="ja">Japanese</option>
                 <option value="ko">Korean</option>
-                <option value="es">Spanish</option>
             </select>
             <form id="form-summarize-audio" action="/web/transcribe-audio" method="post" enctype="multipart/form-data" onsubmit="injectLang('form-summarize-audio'); showLoading('loading-audio', this)">
                 <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
