@@ -11,26 +11,29 @@ OUTPUT_DIR = "outputs"
 def extract_participants_from_transcript(transcript_text: str) -> list[str]:
     participants = []
     seen = set()
+    known_roles = set()
 
     for line in transcript_text.splitlines():
         line = line.strip()
         if not line:
             continue
 
-        # Match "Role (Name):" format — extract the name inside parentheses
-        paren_match = re.match(r"^[A-Za-z][A-Za-z0-9 _.-]*\(([A-Za-z][A-Za-z0-9 _.-]{0,50})\)\s*:", line)
+        # Match "Role (Name):" format — extract the name, record the role to skip later
+        paren_match = re.match(r"^([A-Za-z][A-Za-z0-9 _.-]*)\(([A-Za-z][A-Za-z0-9 _.-]{0,50})\)\s*:", line)
         if paren_match:
-            name = paren_match.group(1).strip()
+            role = paren_match.group(1).strip().lower()
+            name = paren_match.group(2).strip()
+            known_roles.add(role)
             if name and name.lower() not in seen:
                 seen.add(name.lower())
                 participants.append(name)
             continue
 
-        # Match plain "Name:" format
+        # Match plain "Name:" format — skip if it's a known role
         match = re.match(r"^([A-Za-z][A-Za-z0-9 _.-]{0,50}):", line)
         if match:
             name = match.group(1).strip()
-            if name and name.lower() not in seen:
+            if name and name.lower() not in seen and name.lower() not in known_roles:
                 seen.add(name.lower())
                 participants.append(name)
 
