@@ -1,5 +1,4 @@
-from fastapi import FastAPI, UploadFile
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from app.routes.web import router as web_router
 from pydantic import BaseModel
@@ -16,6 +15,9 @@ from app.services.email_generation_service import (
 )
 
 
+from app.database import init_db
+init_db()
+
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -27,9 +29,9 @@ class MeetingQuestionRequest(BaseModel):
 
 
 @app.post("/generate_followup_email", response_model=GenerateFollowupEmailResponse)
-def generate_followup_email_endpoint(request: GenerateFollowupEmailRequest):
+async def generate_followup_email_endpoint(request: GenerateFollowupEmailRequest):
     try:
-        result = generate_followup_email(
+        result = await generate_followup_email(
             meeting_file=request.meeting_file,
             tone=request.tone,
             audience=request.audience,
@@ -45,9 +47,9 @@ def generate_followup_email_endpoint(request: GenerateFollowupEmailRequest):
 
 
 @app.post("/generate_followup_email_latest", response_model=GenerateFollowupEmailResponse)
-def generate_followup_email_latest_endpoint(request: GenerateLatestFollowupEmailRequest):
+async def generate_followup_email_latest_endpoint(request: GenerateLatestFollowupEmailRequest):
     try:
-        result = generate_followup_email_latest(
+        result = await generate_followup_email_latest(
             tone=request.tone,
             audience=request.audience,
             signature=request.signature
@@ -65,10 +67,10 @@ def generate_followup_email_latest_endpoint(request: GenerateLatestFollowupEmail
 async def summarize(file: UploadFile):
     content = await file.read()
     transcript = content.decode("utf-8")
-    result = summarize_meeting(transcript)
+    result = await summarize_meeting(transcript)
     return result
 
 
 @app.post("/ask_meetings")
-def ask_saved_meetings(request: MeetingQuestionRequest):
-    return ask_meetings(request.question)
+async def ask_saved_meetings(request: MeetingQuestionRequest):
+    return await ask_meetings(request.question)

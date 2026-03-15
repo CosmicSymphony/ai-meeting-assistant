@@ -3,19 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 
-from openai import OpenAI
-from app.config import settings
-
-_client = None
-
-def _get_client() -> OpenAI:
-    global _client
-    if _client is None:
-        _client = OpenAI(api_key=settings.OPENAI_API_KEY)
-    return _client
+from app.llm.provider_factory import get_llm_provider
 
 
-def ask_single_meeting_question(meeting: Dict[str, Any], question: str) -> str:
+async def ask_single_meeting_question(meeting: Dict[str, Any], question: str) -> str:
     """
     Answer a user's question using only one meeting's data.
     """
@@ -31,8 +22,6 @@ def ask_single_meeting_question(meeting: Dict[str, Any], question: str) -> str:
     }
 
     prompt = f"""
-You are an AI meeting assistant.
-
 Answer the user's question using ONLY the meeting data provided below.
 Do not invent information.
 If the answer is not found in the meeting, say:
@@ -48,10 +37,5 @@ User question:
 {question}
 """
 
-    client = _get_client()
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=prompt,
-    )
-
-    return response.output_text.strip()
+    provider = get_llm_provider()
+    return (await provider.generate(prompt)).strip()

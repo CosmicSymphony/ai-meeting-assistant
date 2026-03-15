@@ -76,27 +76,24 @@ Action items:
 
 
 def parse_email_response(text: str, meeting_title: str) -> dict:
-    fallback_subject = f"Follow-Up: {meeting_title}"
-
-    subject = fallback_subject
+    subject = f"Follow-Up: {meeting_title}"
     body = text.strip()
 
     if "SUBJECT:" in text and "BODY:" in text:
-        subject_part = text.split("SUBJECT:", 1)[1].split("BODY:", 1)[0].strip()
-        body_part = text.split("BODY:", 1)[1].strip()
+        after_subject = text.split("SUBJECT:", 1)[1]
+        parts = after_subject.split("BODY:", 1)
+        if len(parts) == 2:
+            subject_part = parts[0].strip()
+            body_part = parts[1].strip()
+            if subject_part:
+                subject = subject_part
+            if body_part:
+                body = body_part
 
-        if subject_part:
-            subject = subject_part
-        if body_part:
-            body = body_part
-
-    return {
-        "subject": subject,
-        "email_body": body
-    }
+    return {"subject": subject, "email_body": body}
 
 
-def generate_followup_email(
+async def generate_followup_email(
     meeting_file: str,
     tone: str = "professional",
     audience: str = "team",
@@ -112,7 +109,7 @@ def generate_followup_email(
     )
 
     provider = get_llm_provider()
-    llm_response = provider.generate(prompt)
+    llm_response = await provider.generate(prompt)
 
     return parse_email_response(
         text=llm_response,
@@ -120,14 +117,14 @@ def generate_followup_email(
     )
 
 
-def generate_followup_email_latest(
+async def generate_followup_email_latest(
     tone: str = "professional",
     audience: str = "team",
     signature: str | None = None
 ) -> dict:
     latest_meeting_file = get_latest_meeting_file()
 
-    return generate_followup_email(
+    return await generate_followup_email(
         meeting_file=latest_meeting_file,
         tone=tone,
         audience=audience,

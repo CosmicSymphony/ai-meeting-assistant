@@ -1,174 +1,545 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Meeting Assistant</title>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Meeting Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>AI Meeting Assistant</h1>
 
-        <section class="card">
-            <h2>Upload Transcript</h2>
-            <p style="color: #6b7280; font-size: 13px; margin-top: 0;">Upload a <strong>.txt</strong> transcript file</p>
-            <form action="/web/summarize" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-summarize', this)">
-                <input type="file" name="file" accept=".txt" required>
-                <button type="submit">Summarize Meeting</button>
-            </form>
-            <p id="loading-summarize" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Summarizing...</p>
-        </section>
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header class="site-header">
+    <img src="/static/logo.png" alt="Summari Logo" class="site-logo">
+    <p class="tagline">Transcribe · Summarise · Ask · Email</p>
+  </header>
 
-        <section class="card">
-            <h2>Upload Audio Recording</h2>
-            <p style="color: #6b7280; font-size: 13px; margin-top: 0;">Upload a meeting recording — transcribed automatically using Whisper AI. Supports <strong>mp3, mp4, wav, m4a, webm</strong> (max 25MB)</p>
-            <form action="/web/transcribe-audio" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-audio', this)">
-                <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
-                <button type="submit">Transcribe &amp; Summarize</button>
-            </form>
-            <form action="/web/transcribe-only" method="post" enctype="multipart/form-data" onsubmit="showLoading('loading-audio', this)" style="margin-top: 8px;">
-                <input type="file" name="file" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga" required>
-                <button type="submit" style="background: #6b7280;">Preview Transcript Only</button>
-            </form>
-            <p id="loading-audio" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Transcribing audio... this may take a moment.</p>
-        </section>
+  <div class="container">
 
-        {% if transcript_preview %}
-        <section class="card">
-            <h2>Transcript Preview</h2>
-            <p style="color: #6b7280; font-size: 13px;">
-                This is the raw text Whisper extracted from your audio. If it looks correct, use <strong>Transcribe &amp; Summarize</strong> to process it.
-                {% if detected_language %}
-                — Detected language: <strong>{{ detected_language }}</strong>
-                {% endif %}
-            </p>
-            <pre>{{ transcript_preview }}</pre>
-        </section>
+    <!-- ── Upload Row (Transcript + Audio side by side) ────── -->
+    <div class="upload-row">
+
+      <!-- Upload Transcript -->
+      <div class="card" id="card-summarize">
+        <div class="card-header">
+          <div class="card-icon purple">📄</div>
+          <div>
+            <div class="card-title">Upload Transcript</div>
+            <div class="card-subtitle">Paste or upload a <strong>.txt</strong> file to get an instant summary</div>
+          </div>
+        </div>
+        <form action="/web/summarize" method="post" enctype="multipart/form-data"
+              onsubmit="return validateFile(this, 'file', 'err-summarize', 'load-summarize')">
+          <label class="upload-area" id="drop-summarize">
+            <div class="upload-icon">📂</div>
+            <div class="upload-label">Drag & drop or <strong>click to browse</strong></div>
+            <div class="upload-filename" id="name-summarize">No file chosen</div>
+            <input type="file" name="file" accept=".txt"
+                   onchange="showFilename(this, 'name-summarize')">
+          </label>
+          <button type="submit" class="btn btn-primary">
+            ✨ Summarize Meeting
+          </button>
+        </form>
+        <div class="loading-msg" id="load-summarize">
+          <div class="spinner"></div> Summarizing…
+        </div>
+        {% if summarize_error %}
+        <div class="error-block" style="margin-top:12px;">⚠️ {{ summarize_error }}</div>
         {% endif %}
+      </div>
 
-        <section class="card">
-            <h2>Ask Across Past Meetings</h2>
-            <form action="/web/ask" method="post" onsubmit="showLoading('loading-ask', this)">
-                <input
-                    type="text"
-                    name="question"
-                    placeholder="Ask a question across all saved meetings..."
-                    required
-                >
-                <button type="submit">Ask</button>
-            </form>
-            <p id="loading-ask" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Thinking...</p>
-        </section>
+      <!-- Upload Audio -->
+      <div class="card" id="card-audio">
+        <div class="card-header">
+          <div class="card-icon cyan">🎧</div>
+          <div>
+            <div class="card-title">Upload Audio Recording</div>
+            <div class="card-subtitle">Transcribed automatically · Supports mp3, mp4, wav, m4a, webm (max 25 MB)</div>
+          </div>
+        </div>
 
-        <section class="card">
-            <h2>Generate Email for Latest Meeting</h2>
-            <form action="/web/generate-latest-email" method="post" onsubmit="showLoading('loading-email', this)">
-                <button type="submit">Generate Email</button>
-            </form>
-            <p id="loading-email" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Generating email...</p>
-        </section>
+        <label class="upload-area" id="drop-audio">
+          <div class="upload-icon">🎵</div>
+          <div class="upload-label">Drag & drop or <strong>click to browse</strong></div>
+          <div class="upload-filename" id="name-audio">No file chosen</div>
+          <input type="file" id="audio-file-input" accept=".mp3,.mp4,.wav,.m4a,.webm,.mpeg,.mpga"
+                 onchange="showFilename(this, 'name-audio')">
+        </label>
 
-        <script>
-            function showLoading(id, form) {
-                document.getElementById(id).style.display = 'block';
-                form.querySelector('button[type=submit]').disabled = true;
-            }
-        </script>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" onclick="submitAudio('/web/transcribe-audio', 'load-audio')">
+            🚀 Transcribe &amp; Summarize
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="submitAudio('/web/transcribe-only', 'load-audio')">
+            👁 Preview Transcript Only
+          </button>
+        </div>
 
-<section class="card">
-    <h2>Recent Meetings</h2>
+        <!-- Hidden forms to submit audio -->
+        <form id="form-transcribe-audio" action="/web/transcribe-audio" method="post" enctype="multipart/form-data" style="display:none">
+          <input type="file" name="file" id="hidden-audio-full">
+        </form>
+        <form id="form-transcribe-only" action="/web/transcribe-only" method="post" enctype="multipart/form-data" style="display:none">
+          <input type="file" name="file" id="hidden-audio-only">
+        </form>
 
-    {% if meetings %}
-        <ul>
-            {% for m in meetings %}
-                <li>
-                    <a href="/web/meeting/{{ m._file }}">{{ m.meeting_title or "Untitled Meeting" }}</a>
-                    — {{ m.meeting_date or "N/A" }}
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No meetings saved yet.</p>
-    {% endif %}
-</section>
-
-        {% if summary_result %}
-        <section class="card">
-            <h2>Summary Result</h2>
-
-            {% if summary_result.error %}
-                <p><strong>Error:</strong> {{ summary_result.error }}</p>
-            {% else %}
-                <p><strong>Title:</strong> {{ summary_result.meeting_title or "N/A" }}</p>
-                <p><strong>Date:</strong> {{ summary_result.meeting_date or "N/A" }}</p>
-                <p><strong>Summary:</strong> {{ summary_result.meeting_summary or "N/A" }}</p>
-
-                <h3>Participants</h3>
-                {% if summary_result.participants %}
-                    <ul>
-                        {% for p in summary_result.participants %}
-                            <li>{{ p }}</li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>No participants detected.</p>
-                {% endif %}
-
-                <h3>Key Decisions</h3>
-                {% if summary_result.key_decisions %}
-                    <ul>
-                        {% for d in summary_result.key_decisions %}
-                            <li>{{ d }}</li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>No key decisions found.</p>
-                {% endif %}
-
-                <h3>Action Items</h3>
-                {% if summary_result.action_items %}
-                    <ul>
-                        {% for item in summary_result.action_items %}
-                            <li>
-                                <strong>Task:</strong> {{ item.task or "N/A" }}<br>
-                                <strong>Owner:</strong> {{ item.owner or "N/A" }}<br>
-                                <strong>Deadline:</strong> {{ item.deadline or "N/A" }}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>No action items found.</p>
-                {% endif %}
-
-            {% endif %}
-        </section>
+        <div class="loading-msg" id="load-audio">
+          <div class="spinner"></div> Transcribing audio… this may take a moment.
+        </div>
+        {% if audio_error %}
+        <div class="error-block" style="margin-top:12px;">⚠️ {{ audio_error }}</div>
         {% endif %}
+      </div>
 
-        {% if ask_result %}
-        <section class="card">
-    <h2>Ask Result</h2>
+    </div><!-- /upload-row -->
 
-    {% if ask_result.error %}
-        <p><strong>Error:</strong> {{ ask_result.error }}</p>
-    {% else %}
-        <p><strong>Answer:</strong> {{ ask_result.answer }}</p>
-        <p><strong>Matched Meetings:</strong> {{ ask_result.matched_meetings_count }}</p>
-    {% endif %}
-</section>
-        {% endif %}
+    <!-- ── Record Meeting ──────────────────────────────────── -->
+    <div class="card" id="card-record">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fce7f3;">🎙️</div>
+        <div>
+          <div class="card-title">Record Meeting</div>
+          <div class="card-subtitle">Record live audio from your microphone · auto-transcribed and summarised</div>
+        </div>
+      </div>
 
-        {% if email_result %}
-        <section class="card">
-            <h2>Email Result</h2>
+      <div id="record-idle">
+        <button type="button" class="btn btn-primary" onclick="startRecording()">
+          🎙️ Start Recording
+        </button>
+      </div>
 
-            {% if email_result.error %}
-                <p><strong>Error:</strong> {{ email_result.error }}</p>
-            {% else %}
-                <pre>{{ email_result }}</pre>
-            {% endif %}
-        </section>
-        {% endif %}
+      <div id="record-active" style="display:none;">
+        <div class="record-status">
+          <span class="record-dot"></span>
+          <span>Recording — <span id="record-timer">0:00</span></span>
+        </div>
+        <button type="button" class="btn btn-danger" onclick="stopRecording()">
+          ⏹ Stop &amp; Process
+        </button>
+      </div>
+
+      <div class="loading-msg" id="load-record">
+        <div class="spinner"></div> Transcribing and summarising your recording…
+      </div>
+
+      <!-- Hidden form to submit the recorded audio blob -->
+      <form id="form-record" action="/web/record-meeting" method="post"
+            enctype="multipart/form-data" style="display:none;">
+        <input type="file" name="audio" id="record-audio-input">
+      </form>
+      {% if record_error %}
+      <div class="error-block" style="margin-top:12px;">⚠️ {{ record_error }}</div>
+      {% endif %}
     </div>
+
+    <!-- ── Transcript Preview ──────────────────────────────── -->
+    {% if transcript_preview %}
+    <div class="card" id="card-transcript">
+      <div class="card-header">
+        <div class="card-icon purple">📝</div>
+        <div>
+          <div class="card-title">Transcript Preview</div>
+          <div class="card-subtitle">
+            Raw text extracted from your audio
+            {% if detected_language %} · Detected language: <strong>{{ detected_language }}</strong>{% endif %}
+          </div>
+        </div>
+      </div>
+      <pre>{{ transcript_preview }}</pre>
+    </div>
+    {% endif %}
+
+    <!-- ── Ask Across Meetings ─────────────────────────────── -->
+    <div class="card" id="card-ask">
+      <div class="card-header">
+        <div class="card-icon purple">💬</div>
+        <div>
+          <div class="card-title">Ask Across All Meetings</div>
+          <div class="card-subtitle">Try "what did we discuss on 10 March?" or "who owns the API task?"</div>
+        </div>
+      </div>
+      <form action="/web/ask" method="post" onsubmit="handleSubmit(this, 'load-ask')">
+        <div class="form-group" style="display:flex; gap:10px;">
+          <input type="text" name="question"
+                 placeholder="Ask anything about your meetings…"
+                 value="{{ ask_question or '' }}"
+                 style="flex:1; margin:0;" required>
+          <button type="submit" class="btn btn-primary" style="white-space:nowrap;">Ask →</button>
+        </div>
+      </form>
+      <div class="loading-msg" id="load-ask">
+        <div class="spinner"></div> Thinking…
+      </div>
+
+      {% if ask_result %}
+      <div class="divider"></div>
+      <div class="answer-box">
+        <div class="answer-box-header">
+          {% if ask_question %}"{{ ask_question }}" · {% endif %}{{ ask_result.matched_meetings_count }} meeting(s) searched
+        </div>
+        <div class="answer-box-body">{{ ask_result.answer }}</div>
+      </div>
+      {% endif %}
+      {% if ask_error %}
+      <div class="error-block" style="margin-top:12px;">⚠️ {{ ask_error }}</div>
+      {% endif %}
+    </div>
+
+    <!-- ── Generate Email ──────────────────────────────────── -->
+    <div class="card" id="card-email">
+      <div class="card-header">
+        <div class="card-icon amber">✉️</div>
+        <div>
+          <div class="card-title">Generate Follow-Up Email</div>
+          <div class="card-subtitle">Drafts a follow-up email from a meeting summary</div>
+        </div>
+      </div>
+      <form action="/web/generate-email" method="post" onsubmit="handleSubmit(this, 'load-email')">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Meeting</label>
+            <select name="meeting_file">
+              <option value="">Latest meeting</option>
+              {% for m in meetings %}
+              <option value="{{ m._file }}">{{ m.meeting_title or "Untitled" }}{% if m.meeting_date %} · {{ m.meeting_date }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Your name (signature)</label>
+            <input type="text" name="signature_name" placeholder="e.g. Alex Johnson">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tone</label>
+            <select name="tone">
+              <option value="professional">Professional</option>
+              <option value="casual">Casual</option>
+              <option value="formal">Formal</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Audience</label>
+            <select name="audience">
+              <option value="team">Team</option>
+              <option value="client">Client</option>
+              <option value="management">Management</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">✉️ Generate Email</button>
+      </form>
+      <div class="loading-msg" id="load-email">
+        <div class="spinner"></div> Generating email…
+      </div>
+
+      {% if email_error %}
+      <div class="error-block" style="margin-top:12px;">⚠️ {{ email_error }}</div>
+      {% endif %}
+      {% if email_result %}
+      <div class="divider"></div>
+      <div class="email-preview">
+        <div class="email-preview-subject">
+          <div class="email-preview-label">Subject</div>
+          <div class="email-preview-subject-text" id="email-subject">{{ email_result.subject }}</div>
+          <button class="btn-copy" onclick="copyText('email-subject', this)" title="Copy subject">Copy</button>
+        </div>
+        <div class="email-preview-body">
+          <div class="email-preview-label">Body</div>
+          <div class="email-preview-body-text" id="email-body">{{ email_result.email_body }}</div>
+          <button class="btn-copy" onclick="copyText('email-body', this)" title="Copy body">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── Summary Result ──────────────────────────────────── -->
+    {% if summary_result %}
+    <div class="card" id="card-summary-result">
+      <div class="card-header">
+        <div class="card-icon green">✅</div>
+        <div>
+          <div class="card-title">{{ summary_result.meeting_title or "Meeting Summary" }}</div>
+          <div class="card-subtitle">Summary generated successfully</div>
+        </div>
+      </div>
+
+      <div class="meta-row">
+        {% if summary_result.meeting_date %}
+        <span class="badge badge-purple">📅 {{ summary_result.meeting_date }}</span>
+        {% endif %}
+        {% if summary_result.participants %}
+        <span class="badge badge-cyan">👥 {{ summary_result.participants | length }} participant(s)</span>
+        {% endif %}
+      </div>
+
+      {% if summary_result.meeting_summary %}
+      <p style="font-size:0.9rem; line-height:1.7; color: var(--text); margin-bottom:18px;">
+        {{ summary_result.meeting_summary }}
+      </p>
+      {% endif %}
+
+      {% if summary_result.participants %}
+      <h3>Participants</h3>
+      <div class="participant-list">
+        {% for p in summary_result.participants %}
+        <div class="participant-pill">
+          <div class="avatar">{{ p[0] | upper }}</div>
+          {{ p }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if summary_result.key_decisions %}
+      <h3>Key Decisions</h3>
+      <div class="decisions-list">
+        {% for d in summary_result.key_decisions %}
+        <div class="decision-item">{{ d }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if summary_result.action_items %}
+      <h3>Action Items</h3>
+      <div class="action-items-list">
+        {% for item in summary_result.action_items %}
+        <div class="action-item">
+          <div class="action-item-task">{{ item.task or "N/A" }}</div>
+          <div class="action-item-meta">
+            <span class="meta-tag">👤 {{ item.owner or "Unassigned" }}</span>
+            <span class="meta-tag">🗓 {{ item.deadline or "No deadline" }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+    {% endif %}
+
+    <!-- ── Recent Meetings ─────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon cyan">🗂</div>
+        <div>
+          <div class="card-title">Recent Meetings</div>
+          <div class="card-subtitle">Click any meeting to view details and ask questions</div>
+        </div>
+      </div>
+
+      {% if meetings %}
+      <div class="meeting-list">
+        {% for m in meetings %}
+        <div class="meeting-item">
+          <a class="meeting-item-left" href="/web/meeting/{{ m._file }}" style="text-decoration:none; flex:1;">
+            <div class="meeting-dot"></div>
+            <div>
+              <div class="meeting-item-title">{{ m.meeting_title or "Untitled Meeting" }}</div>
+              <div class="meeting-item-date">{{ m.meeting_date or "Date unknown" }}</div>
+            </div>
+          </a>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="meeting-arrow">›</span>
+            <form method="post" action="/web/meeting/{{ m._file }}/delete" style="margin:0;"
+                  onsubmit="return confirm('Delete this meeting? This cannot be undone.')">
+              <button type="submit" class="btn-delete" title="Delete meeting">🗑</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        No meetings saved yet. Upload a transcript or recording above to get started.
+      </div>
+      {% endif %}
+    </div>
+
+  </div><!-- /container -->
+
+  <!-- ── Toast notification ──────────────────────────────── -->
+  <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+
+  <script>
+    let toastTimer = null;
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = '⚠️  ' + message;
+      toast.classList.remove('toast-hide');
+      toast.classList.add('toast-show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.replace('toast-show', 'toast-hide');
+      }, 3000);
+    }
+
+    function validateFile(form, inputName, errId, loadId) {
+      const input = form.querySelector(`[name="${inputName}"]`);
+      if (!input || !input.files || !input.files[0]) {
+        showToast('Please select a file before continuing.');
+        return false;
+      }
+      handleSubmit(form, loadId);
+      return true;
+    }
+
+    function handleSubmit(form, loadId) {
+      document.getElementById(loadId).style.display = 'flex';
+      form.querySelector('button[type=submit]').disabled = true;
+    }
+
+    function copyText(elementId, btn) {
+      const text = document.getElementById(elementId).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    function showFilename(input, labelId) {
+      const label = document.getElementById(labelId);
+      label.textContent = input.files[0] ? input.files[0].name : 'No file chosen';
+    }
+
+    // Assign a File object to an input's file list
+    function assignFileTo(input, file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+    }
+
+    // Drag-and-drop for all upload areas
+    document.querySelectorAll('.upload-area').forEach(area => {
+      ['dragover', 'dragenter'].forEach(evt => {
+        area.addEventListener(evt, e => {
+          e.preventDefault();
+          area.style.borderColor = 'var(--primary)';
+          area.style.background  = 'var(--primary-light)';
+        });
+      });
+
+      area.addEventListener('dragleave', () => {
+        area.style.borderColor = '';
+        area.style.background  = '';
+      });
+
+      area.addEventListener('drop', e => {
+        e.preventDefault();
+        area.style.borderColor = '';
+        area.style.background  = '';
+
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+
+        const input = area.querySelector('input[type="file"]');
+        if (!input) return;
+
+        assignFileTo(input, file);
+        input.dispatchEvent(new Event('change')); // triggers onchange → showFilename
+      });
+    });
+
+    // ── Recording ────────────────────────────────────────────
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let timerInterval = null;
+    let secondsElapsed = 0;
+
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          submitRecording(blob);
+        };
+
+        mediaRecorder.start(1000); // collect chunks every second
+        secondsElapsed = 0;
+        timerInterval = setInterval(() => {
+          secondsElapsed++;
+          document.getElementById('record-timer').textContent = formatTime(secondsElapsed);
+        }, 1000);
+
+        document.getElementById('record-idle').style.display = 'none';
+        document.getElementById('record-active').style.display = 'block';
+
+      } catch (err) {
+        showToast('Microphone access denied. Please allow microphone access and try again.');
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        clearInterval(timerInterval);
+        mediaRecorder.stop();
+        document.getElementById('record-active').style.display = 'none';
+        document.getElementById('load-record').style.display = 'flex';
+      }
+    }
+
+    function submitRecording(blob) {
+      const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+      assignFileTo(document.getElementById('record-audio-input'), file);
+      localStorage.setItem('scrollY', window.scrollY);
+      document.getElementById('form-record').submit();
+    }
+
+    // Restore scroll position after page reload
+    (function () {
+      const y = localStorage.getItem('scrollY');
+      if (y !== null) {
+        localStorage.removeItem('scrollY');
+        window.scrollTo({ top: parseInt(y, 10), behavior: 'instant' });
+      }
+    })();
+
+    // Save scroll position before any form submit
+    document.querySelectorAll('form').forEach(form => {
+      form.addEventListener('submit', () => {
+        localStorage.setItem('scrollY', window.scrollY);
+      });
+    });
+
+    // Audio submit helper — copies chosen file into a hidden form and submits it
+    function submitAudio(action, loadId) {
+      const fileInput = document.getElementById('audio-file-input');
+      if (!fileInput.files || !fileInput.files[0]) {
+        showToast('Please choose an audio file first.');
+        return;
+      }
+
+      localStorage.setItem('scrollY', window.scrollY);
+      if (action.includes('transcribe-only')) {
+        assignFileTo(document.getElementById('hidden-audio-only'), fileInput.files[0]);
+        document.getElementById('load-audio').style.display = 'flex';
+        document.getElementById('form-transcribe-only').submit();
+      } else {
+        assignFileTo(document.getElementById('hidden-audio-full'), fileInput.files[0]);
+        document.getElementById('load-audio').style.display = 'flex';
+        document.getElementById('form-transcribe-audio').submit();
+      }
+    }
+  </script>
 </body>
 </html>

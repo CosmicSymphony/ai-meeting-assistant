@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 from app.config import settings
 
 
@@ -7,11 +7,11 @@ class OpenAIProvider:
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is missing. Check your .env file.")
 
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-    def generate(self, prompt: str) -> str:
+    async def generate(self, prompt: str) -> str:
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an intelligent AI meeting assistant."},

@@ -1,110 +1,202 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meeting Detail</title>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ meeting.meeting_title or "Meeting Detail" }} · MeetingAI</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <section class="card">
-            <p><a href="/web/">← Back to Home</a></p>
 
-            <h1>{{ meeting.meeting_title or "Untitled Meeting" }}</h1>
-            <p><strong>Date:</strong> {{ meeting.meeting_date or "N/A" }}</p>
-            <p><strong>Timestamp:</strong> {{ meeting.meeting_timestamp or "N/A" }}</p>
-        </section>
+  <header class="site-header">
+    <div class="logo">🎙️ Meeting<span>AI</span></div>
+    <p class="tagline">Transcribe · Summarise · Ask · Email</p>
+  </header>
 
-        <section class="card">
-            <h2>Participants</h2>
-            {% if meeting.participants and meeting.participants|length > 0 %}
-                <ul>
-                    {% for p in meeting.participants %}
-                        <li>{{ p }}</li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>No participants detected.</p>
-            {% endif %}
-        </section>
+  <div class="container">
 
-        <section class="card">
-            <h2>Summary</h2>
-            <p>{{ meeting.meeting_summary or "No summary available." }}</p>
-        </section>
-
-        <section class="card">
-            <h2>Key Decisions</h2>
-            {% if meeting.key_decisions and meeting.key_decisions|length > 0 %}
-                <ul>
-                    {% for decision in meeting.key_decisions %}
-                        <li>{{ decision }}</li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>No key decisions found.</p>
-            {% endif %}
-        </section>
-
-        <section class="card">
-            <h2>Action Items</h2>
-            {% if meeting.action_items and meeting.action_items|length > 0 %}
-                <ul>
-                    {% for item in meeting.action_items %}
-                        <li>
-                            <strong>Task:</strong> {{ item.task or "N/A" }}<br>
-                            <strong>Owner:</strong> {{ item.owner or "N/A" }}<br>
-                            <strong>Deadline:</strong> {{ item.deadline or "N/A" }}
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>No action items found.</p>
-            {% endif %}
-        </section>
-
-        <section class="card">
-            <h2>Ask About This Meeting</h2>
-
-            <form method="post" action="/web/meeting/{{ meeting._file }}/ask" onsubmit="showLoading(this)">
-                <input
-                    type="text"
-                    name="question"
-                    placeholder="Ask a question about this meeting..."
-                    value="{{ question or '' }}"
-                    required
-                    style="width: 70%; padding: 10px; border: 1px solid #ccc; border-radius: 8px;"
-                >
-                <button
-                    type="submit"
-                    style="padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer;"
-                >
-                    Ask
-                </button>
-            </form>
-            <p id="loading-msg" style="display:none; margin-top: 12px; color: #6b7280; font-style: italic;">Thinking...</p>
-            <script>
-                function showLoading(form) {
-                    document.getElementById('loading-msg').style.display = 'block';
-                    form.querySelector('button[type=submit]').disabled = true;
-                }
-            </script>
-
-            {% if answer %}
-                <div style="margin-top: 20px;">
-                    <p style="margin-bottom: 8px;"><strong>Question:</strong> {{ question }}</p>
-                    <div style="background: #f9fafb; border-left: 4px solid #2563eb; border-radius: 8px; padding: 14px 18px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.7; font-size: 14px;">{{ answer }}</div>
-                </div>
-            {% endif %}
-
-            {% if meeting_error %}
-                <div style="margin-top: 16px; color: red;">
-                    <strong>Error:</strong> {{ meeting_error }}
-                </div>
-            {% endif %}
-        </section>
-
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <a href="/web/" class="back-link" style="margin-bottom:0;">← Back to Dashboard</a>
+      <form method="post" action="/web/meeting/{{ meeting._file }}/delete"
+            onsubmit="return confirm('Delete this meeting? This cannot be undone.')">
+        <button type="submit" class="btn btn-danger" style="font-size:0.82rem; padding:8px 14px;">
+          🗑 Delete Meeting
+        </button>
+      </form>
     </div>
+
+    <!-- ── Meeting Hero ─────────────────────────────────────── -->
+    <div class="meeting-hero">
+      <h1>{{ meeting.meeting_title or "Untitled Meeting" }}</h1>
+      <div class="meta-row">
+        {% if meeting.meeting_date %}
+        <span class="badge">📅 {{ meeting.meeting_date }}</span>
+        {% endif %}
+        {% if meeting.meeting_timestamp %}
+        <span class="badge">🕐 {{ meeting.meeting_timestamp }}</span>
+        {% endif %}
+        {% if meeting.participants %}
+        <span class="badge">👥 {{ meeting.participants | length }} participants</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── Summary ──────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon purple">📋</div>
+        <div>
+          <div class="card-title">Summary</div>
+        </div>
+      </div>
+      <p style="font-size:0.9rem; line-height:1.75; color: var(--text);">
+        {{ meeting.meeting_summary or "No summary available." }}
+      </p>
+    </div>
+
+    <!-- ── Participants ─────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon cyan">👥</div>
+        <div><div class="card-title">Participants</div></div>
+      </div>
+      {% if meeting.participants and meeting.participants | length > 0 %}
+      <div class="participant-list">
+        {% for p in meeting.participants %}
+        <div class="participant-pill">
+          <div class="avatar">{{ p[0] | upper }}</div>
+          {{ p }}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:12px 0;">No participants detected.</div>
+      {% endif %}
+    </div>
+
+    <!-- ── Key Decisions ────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon green">✅</div>
+        <div><div class="card-title">Key Decisions</div></div>
+      </div>
+      {% if meeting.key_decisions and meeting.key_decisions | length > 0 %}
+      <div class="decisions-list">
+        {% for decision in meeting.key_decisions %}
+        <div class="decision-item">{{ decision }}</div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:12px 0;">No key decisions recorded.</div>
+      {% endif %}
+    </div>
+
+    <!-- ── Action Items ─────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon amber">📌</div>
+        <div><div class="card-title">Action Items</div></div>
+      </div>
+      {% if meeting.action_items and meeting.action_items | length > 0 %}
+      <div class="action-items-list">
+        {% for item in meeting.action_items %}
+        <div class="action-item">
+          <div class="action-item-task">{{ item.task or "N/A" }}</div>
+          <div class="action-item-meta">
+            <span class="meta-tag">👤 {{ item.owner or "Unassigned" }}</span>
+            <span class="meta-tag">🗓 {{ item.deadline or "No deadline" }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:12px 0;">No action items recorded.</div>
+      {% endif %}
+    </div>
+
+    <!-- ── Full Transcript ──────────────────────────────────── -->
+    {% if meeting.transcript %}
+    <div class="card">
+      <button class="transcript-toggle" onclick="toggleTranscript(this)" aria-expanded="false">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="card-icon purple" style="margin:0;">📝</div>
+          <div>
+            <div class="card-title" style="margin:0;">Full Transcript</div>
+            <div class="card-subtitle" style="margin:0;">Click to expand</div>
+          </div>
+        </div>
+        <span class="transcript-chevron">›</span>
+      </button>
+      <div class="transcript-body" id="transcript-body" style="display:none;">
+        <div class="divider" style="margin-top:0;"></div>
+        <pre class="transcript-pre">{{ meeting.transcript }}</pre>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Ask About This Meeting ───────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon purple">💬</div>
+        <div>
+          <div class="card-title">Ask About This Meeting</div>
+          <div class="card-subtitle">Ask anything — who said what, decisions made, action items, etc.</div>
+        </div>
+      </div>
+
+      <form method="post" action="/web/meeting/{{ meeting._file }}/ask"
+            onsubmit="handleSubmit(this)">
+        <div class="form-group" style="display:flex; gap:10px;">
+          <input
+            type="text"
+            name="question"
+            placeholder="e.g. What were the action items for John?"
+            value="{{ question or '' }}"
+            style="flex:1; margin:0;"
+            required
+          >
+          <button type="submit" class="btn btn-primary" style="white-space:nowrap;">Ask →</button>
+        </div>
+      </form>
+
+      <div class="loading-msg" id="loading-msg">
+        <div class="spinner"></div> Thinking…
+      </div>
+
+      {% if answer %}
+      <div class="answer-box" style="margin-top:20px;">
+        <div class="answer-box-header">
+          Answer to: "{{ question }}"
+        </div>
+        <div class="answer-box-body">{{ answer }}</div>
+      </div>
+      {% endif %}
+
+      {% if meeting_error %}
+      <div class="error-block" style="margin-top:16px; border-radius: var(--radius-sm);">
+        ⚠️ {{ meeting_error }}
+      </div>
+      {% endif %}
+    </div>
+
+  </div><!-- /container -->
+
+  <script>
+    function handleSubmit(form) {
+      document.getElementById('loading-msg').style.display = 'flex';
+      form.querySelector('button[type=submit]').disabled = true;
+    }
+
+    function toggleTranscript(btn) {
+      const body = document.getElementById('transcript-body');
+      const chevron = btn.querySelector('.transcript-chevron');
+      const subtitle = btn.querySelector('.card-subtitle');
+      const expanded = body.style.display !== 'none';
+      body.style.display = expanded ? 'none' : 'block';
+      chevron.style.transform = expanded ? '' : 'rotate(90deg)';
+      subtitle.textContent = expanded ? 'Click to expand' : 'Click to collapse';
+      btn.setAttribute('aria-expanded', !expanded);
+    }
+  </script>
 </body>
 </html>

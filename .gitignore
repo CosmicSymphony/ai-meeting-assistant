@@ -1,6 +1,22 @@
+# Environment & secrets
 .env
+app/.env
+
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
+*.pyo
+
+# Database & recordings (local data)
+meetings.db
+recordings/
 outputs/
 uploads/
+
+# Logs & editor
+server.log
+.claude/
+.vscode/
+*.log
