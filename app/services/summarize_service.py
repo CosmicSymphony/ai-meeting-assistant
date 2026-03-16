@@ -105,7 +105,9 @@ Required JSON structure:
 Rules:
 - Extract participants from the transcript if possible.
 - If the meeting title is not explicitly stated, create a short sensible title.
-- Keep the summary concise but useful.
+- Write a thorough meeting_summary as a bullet-point list (each point starting with "• "). Cover all major topics discussed, context behind decisions, and notable points raised. For longer meetings (20+ minutes) include at least 6-10 bullet points.
+- Key decisions should capture every meaningful decision made, not just the obvious ones.
+- Extract every action item mentioned, even implicit ones.
 - Return arrays even if there is only one item.
 - Return an empty array only if truly no items are present.
 - Do NOT invent dates or timestamps.

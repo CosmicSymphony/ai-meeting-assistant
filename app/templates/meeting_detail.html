@@ -49,9 +49,23 @@
           <div class="card-title">Summary</div>
         </div>
       </div>
-      <p style="font-size:0.9rem; line-height:1.75; color: var(--text);">
-        {{ meeting.meeting_summary or "No summary available." }}
-      </p>
+      {% if meeting.meeting_summary %}
+        {% set bullets = meeting.meeting_summary.split('•') %}
+        {% if bullets | length > 1 %}
+          <ul style="font-size:0.9rem; line-height:1.75; color:var(--text); padding-left:1.2rem; margin:0;">
+            {% for bullet in bullets %}
+              {% set item = bullet.strip() %}
+              {% if item %}
+                <li style="margin-bottom:6px;">{{ item }}</li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p style="font-size:0.9rem; line-height:1.75; color:var(--text);">{{ meeting.meeting_summary }}</p>
+        {% endif %}
+      {% else %}
+        <p style="font-size:0.9rem; color:var(--text);">No summary available.</p>
+      {% endif %}
     </div>
 
     <!-- ── Participants ─────────────────────────────────────── -->

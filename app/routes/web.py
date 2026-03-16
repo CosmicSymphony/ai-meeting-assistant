@@ -83,6 +83,8 @@ async def transcribe_audio_file(request: Request, file: UploadFile = File(...), 
             return render_page(request, org_id, audio_error="File too large. Maximum size is 25MB.", scroll_to="card-audio")
 
         transcript_text, _ = await transcribe_audio(content, file.filename)
+        if len(transcript_text) < 200:
+            return render_page(request, org_id, audio_error="Transcription returned very little text. The audio may be silent, corrupted, or in an unsupported format.", scroll_to="card-audio")
         result = await summarize_meeting(transcript_text, org_id)
         return render_page(request, org_id, summary_result=result, scroll_to="card-summary-result")
     except Exception as e:
