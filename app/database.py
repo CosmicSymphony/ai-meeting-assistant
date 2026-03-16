@@ -47,6 +47,8 @@ def _migrate():
             conn.commit()
             print("[MIGRATE] Added org_id column to meetings table.")
 
+        # bot_sessions table is created by create_all above; no column migrations needed yet
+
 
 def get_db():
     """Open a database session, use it, then close it automatically."""

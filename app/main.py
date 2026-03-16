@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from app.routes.web import router as web_router
+from app.routes.recall import router as recall_router
 from pydantic import BaseModel
 from app.services.summarize_service import summarize_meeting
 from app.services.ask_meetings_service import ask_meetings
@@ -35,6 +36,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(web_router, prefix="/web")
+app.include_router(recall_router, prefix="/recall")
 
 
 class MeetingQuestionRequest(BaseModel):

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Status · AI Meeting Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% if session and recall_status not in ["done", "fatal", "failed"] %}
+  <meta http-equiv="refresh" content="5">
+  {% endif %}
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="logo">🎙️ Meeting<span>AI</span></div>
+    <p class="tagline">Transcribe · Summarise · Ask · Email</p>
+  </header>
+
+  <div class="container">
+
+    <div style="margin-bottom:20px;">
+      <a href="/web/" class="back-link">← Back to Dashboard</a>
+    </div>
+
+    {% if error %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fee2e2;">❌</div>
+        <div><div class="card-title">Failed to send bot</div></div>
+      </div>
+      <div class="error-block">{{ error }}</div>
+    </div>
+
+    {% elif session %}
+
+    <!-- ── Status Card ────────────────────────────────── -->
+    <div class="meeting-hero">
+      <h1>{{ session.meeting_name }}</h1>
+      <div class="meta-row">
+        <span class="badge">🤖 Bot ID: {{ session.bot_id[:16] }}…</span>
+        <span class="badge">📅 {{ session.created_at.strftime("%Y-%m-%d %H:%M") if session.created_at else "" }}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#e0f2fe;">
+          {% if recall_status == "done" %}✅
+          {% elif recall_status in ["fatal", "failed"] %}❌
+          {% else %}🔄{% endif %}
+        </div>
+        <div>
+          <div class="card-title">Status</div>
+          <div class="card-subtitle">{{ status_label }}</div>
+        </div>
+      </div>
+
+      {% if recall_status not in ["done", "fatal", "failed"] %}
+      <div style="display:flex; align-items:center; gap:12px; margin-top:12px; color:var(--text-muted); font-size:0.88rem;">
+        <div class="spinner"></div>
+        This page refreshes automatically every 5 seconds…
+      </div>
+      {% endif %}
+
+      {% if recall_status in ["fatal", "failed"] %}
+      <div class="error-block" style="margin-top:12px;">
+        The bot encountered an error. This can happen if the meeting URL is invalid,
+        the meeting hasn't started yet, or the bot was not admitted from the waiting room.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── Meeting Result (shown when done) ──────────── -->
+    {% if saved_meeting %}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon purple">📋</div>
+        <div>
+          <div class="card-title">Meeting processed successfully</div>
+          <div class="card-subtitle">Summary, decisions, and action items are ready</div>
+        </div>
+      </div>
+      <a href="/web/meeting/{{ saved_meeting.filename }}" class="btn btn-primary" style="display:inline-block; margin-top:12px;">
+        View Meeting Summary →
+      </a>
+    </div>
+    {% elif recall_status == "done" %}
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:12px; color:var(--text-muted); font-size:0.88rem;">
+        <div class="spinner"></div> Processing transcript and generating summary…
+      </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+  </div>
+</body>
+</html>

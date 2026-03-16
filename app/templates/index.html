@@ -94,6 +94,32 @@
 
     </div><!-- /upload-row -->
 
+    <!-- ── Join Teams Meeting ─────────────────────────────────── -->
+    <div class="card" id="card-join-meeting">
+      <div class="card-header">
+        <div class="card-icon" style="background:#dbeafe;">🤖</div>
+        <div>
+          <div class="card-title">Join a Teams Meeting</div>
+          <div class="card-subtitle">Paste a Microsoft Teams meeting link · AI bot joins, records, and summarises automatically</div>
+        </div>
+      </div>
+      <form action="/recall/join-meeting" method="post"
+            onsubmit="this.querySelector('button').disabled=true; document.getElementById('load-join').style.display='flex';">
+        <div class="form-group">
+          <input type="url" name="meeting_url" placeholder="https://teams.microsoft.com/l/meetup-join/…" required
+                 style="width:100%; box-sizing:border-box;">
+        </div>
+        <div class="form-group">
+          <input type="text" name="meeting_name" placeholder="Meeting name (optional)"
+                 style="width:100%; box-sizing:border-box;">
+        </div>
+        <button type="submit" class="btn btn-primary">🚀 Send Bot to Meeting</button>
+      </form>
+      <div class="loading-msg" id="load-join" style="display:none;">
+        <div class="spinner"></div> Sending bot to meeting…
+      </div>
+    </div>
+
     <!-- ── Record Meeting ──────────────────────────────────── -->
     <div class="card" id="card-record">
       <div class="card-header">

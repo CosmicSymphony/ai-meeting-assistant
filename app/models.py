@@ -101,6 +101,7 @@ class Meeting(Base):
         self._action_items = json.dumps(value) if value is not None else None
 
     def to_dict(self):
+
         """Convert a database row back into a plain dict (same shape as the old JSON files)."""
         return {
             "id":              self.id,
@@ -118,3 +119,18 @@ class Meeting(Base):
             "audio_path":      self.audio_path,
             "_file":           self.filename,   # kept for backwards compatibility
         }
+
+
+class BotSession(Base):
+    """Tracks a Recall.ai bot sent to a Teams/Zoom/Meet meeting."""
+    __tablename__ = "bot_sessions"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    org_id      = Column(Integer, ForeignKey("organisations.id"), nullable=True, index=True)
+    bot_id      = Column(String, unique=True, nullable=False)   # Recall.ai bot ID
+    meeting_url = Column(String, nullable=False)
+    meeting_name = Column(String, nullable=True)
+    # Status mirrors Recall.ai: created → joining_call → in_call_recording → done / failed
+    status      = Column(String, default="created")
+    meeting_id  = Column(Integer, ForeignKey("meetings.id"), nullable=True)  # set after processing
+    created_at  = Column(DateTime, default=datetime.utcnow)
