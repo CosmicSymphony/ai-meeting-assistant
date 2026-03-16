@@ -6,9 +6,24 @@ Each attribute = one column (like a spreadsheet column).
 """
 
 import json
+import secrets
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+class Organisation(Base):
+    """Represents a company/tenant. All meetings belong to an organisation."""
+    __tablename__ = "organisations"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    name       = Column(String, nullable=False)
+    slug       = Column(String, unique=True, nullable=False)
+    api_key    = Column(String, unique=True, nullable=False, default=lambda: secrets.token_hex(32))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    meetings = relationship("Meeting", back_populates="organisation")
 
 
 class Meeting(Base):
@@ -16,6 +31,10 @@ class Meeting(Base):
 
     # Every row gets a unique number automatically
     id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Which organisation (tenant) this meeting belongs to
+    org_id = Column(Integer, ForeignKey("organisations.id"), nullable=True, index=True)
+    organisation = relationship("Organisation", back_populates="meetings")
 
     # Basic info
     title        = Column(String, nullable=True)

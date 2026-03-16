@@ -106,8 +106,8 @@ Transcript: {transcript}
     return "\n".join(formatted)
 
 
-def select_relevant_meetings(question: str):
-    recent_meetings = get_recent_meetings(limit=10)
+def select_relevant_meetings(question: str, org_id: int):
+    recent_meetings = get_recent_meetings(org_id, limit=10)
     question_lower = question.lower()
 
     # 1. Specific date query — highest priority
@@ -138,8 +138,8 @@ def select_relevant_meetings(question: str):
     return recent_meetings[:5]
 
 
-async def ask_meetings(question: str):
-    relevant_meetings = select_relevant_meetings(question)
+async def ask_meetings(question: str, org_id: int):
+    relevant_meetings = select_relevant_meetings(question, org_id)
     meeting_context = format_meetings_for_prompt(relevant_meetings)
 
     provider = get_llm_provider()

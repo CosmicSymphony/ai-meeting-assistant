@@ -8,39 +8,44 @@ from app.database import SessionLocal
 from app.models import Meeting
 
 
-# ── Simple in-memory cache (avoids hitting the DB on every page render) ───────
-_meetings_cache: List[Dict[str, Any]] | None = None
-_cache_timestamp: float = 0.0
+# ── Per-tenant in-memory cache ─────────────────────────────────────────────────
+_meetings_cache: Dict[int, List[Dict[str, Any]]] = {}
+_cache_timestamps: Dict[int, float] = {}
 _CACHE_TTL: float = 30.0  # seconds
 
 
-def _invalidate_cache() -> None:
-    global _meetings_cache, _cache_timestamp
-    _meetings_cache = None
-    _cache_timestamp = 0.0
+def _invalidate_cache(org_id: int) -> None:
+    _meetings_cache.pop(org_id, None)
+    _cache_timestamps.pop(org_id, None)
 
 
 # ── Read one meeting ───────────────────────────────────────────────────────────
 
-def load_meeting_from_file(filename: str) -> Optional[Dict[str, Any]]:
-    """Load a single meeting by its filename."""
+def load_meeting_from_file(filename: str, org_id: int) -> Optional[Dict[str, Any]]:
     db = SessionLocal()
     try:
-        meeting = db.query(Meeting).filter_by(filename=filename).first()
+        meeting = db.query(Meeting).filter_by(filename=filename, org_id=org_id).first()
         return meeting.to_dict() if meeting else None
     finally:
         db.close()
 
 
-def get_meeting_by_file(filename: str) -> Optional[Dict[str, Any]]:
-    return load_meeting_from_file(filename)
-
-
-def get_meeting_by_id(meeting_id: int) -> Optional[Dict[str, Any]]:
-    """Load a single meeting by its database ID."""
+def get_meeting_by_file(filename: str, org_id: int | None = None) -> Optional[Dict[str, Any]]:
     db = SessionLocal()
     try:
-        meeting = db.query(Meeting).filter_by(id=meeting_id).first()
+        query = db.query(Meeting).filter_by(filename=filename)
+        if org_id is not None:
+            query = query.filter_by(org_id=org_id)
+        meeting = query.first()
+        return meeting.to_dict() if meeting else None
+    finally:
+        db.close()
+
+
+def get_meeting_by_id(meeting_id: int, org_id: int) -> Optional[Dict[str, Any]]:
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter_by(id=meeting_id, org_id=org_id).first()
         return meeting.to_dict() if meeting else None
     finally:
         db.close()
@@ -48,47 +53,46 @@ def get_meeting_by_id(meeting_id: int) -> Optional[Dict[str, Any]]:
 
 # ── Read all meetings ──────────────────────────────────────────────────────────
 
-def get_all_meetings() -> List[Dict[str, Any]]:
-    """Return all meetings, newest first. Results are cached for 30 seconds."""
-    global _meetings_cache, _cache_timestamp
-
+def get_all_meetings(org_id: int) -> List[Dict[str, Any]]:
+    """Return all meetings for an org, newest first. Results are cached per tenant."""
     now = time.monotonic()
-    if _meetings_cache is not None and (now - _cache_timestamp) < _CACHE_TTL:
-        return _meetings_cache
+    cached = _meetings_cache.get(org_id)
+    ts = _cache_timestamps.get(org_id, 0.0)
+
+    if cached is not None and (now - ts) < _CACHE_TTL:
+        return cached
 
     db = SessionLocal()
     try:
         rows = (
             db.query(Meeting)
+            .filter_by(org_id=org_id)
             .order_by(Meeting.created_at.desc())
             .all()
         )
-        _meetings_cache = [m.to_dict() for m in rows]
-        _cache_timestamp = now
-        return _meetings_cache
+        result = [m.to_dict() for m in rows]
+        _meetings_cache[org_id] = result
+        _cache_timestamps[org_id] = now
+        return result
     finally:
         db.close()
 
 
-def get_recent_meetings(limit: int = 5) -> List[Dict[str, Any]]:
-    return get_all_meetings()[:limit]
+def get_recent_meetings(org_id: int, limit: int = 5) -> List[Dict[str, Any]]:
+    return get_all_meetings(org_id)[:limit]
 
 
-def get_latest_meeting_file() -> str:
-    """Return the filename of the most recently saved meeting."""
-    meetings = get_all_meetings()
+def get_latest_meeting_file(org_id: int) -> str:
+    meetings = get_all_meetings(org_id)
     if not meetings:
-        raise FileNotFoundError("No meetings found in database.")
+        raise FileNotFoundError("No meetings found.")
     return meetings[0]["_file"]
 
 
 # ── Save a meeting ─────────────────────────────────────────────────────────────
 
-def save_meeting(data: dict) -> Meeting:
-    """
-    Insert a new meeting row from a summary dict.
-    Returns the saved Meeting object (with its new id and filename).
-    """
+def save_meeting(data: dict, org_id: int) -> Meeting:
+    """Insert a new meeting row. Returns the saved Meeting object."""
     from datetime import datetime
     import re
 
@@ -105,12 +109,13 @@ def save_meeting(data: dict) -> Meeting:
 
     db = SessionLocal()
     try:
-        # Avoid duplicate filenames
-        if db.query(Meeting).filter_by(filename=filename).first():
+        # Avoid duplicate filenames within the same org
+        if db.query(Meeting).filter_by(filename=filename, org_id=org_id).first():
             suffix = datetime.now().strftime("%H-%M-%S")
             filename = f"{slug}_{meeting_date}_{suffix}.json"
 
         meeting = Meeting()
+        meeting.org_id          = org_id
         meeting.title           = title
         meeting.date            = meeting_date
         meeting.timestamp       = data.get("meeting_timestamp")
@@ -127,7 +132,7 @@ def save_meeting(data: dict) -> Meeting:
         db.commit()
         db.refresh(meeting)
 
-        _invalidate_cache()
+        _invalidate_cache(org_id)
         return meeting
     except Exception:
         db.rollback()
@@ -136,16 +141,16 @@ def save_meeting(data: dict) -> Meeting:
         db.close()
 
 
-def delete_meeting(filename: str) -> bool:
-    """Delete a meeting by filename. Returns True if deleted, False if not found."""
+def delete_meeting(filename: str, org_id: int) -> bool:
+    """Delete a meeting by filename within an org. Returns True if deleted."""
     db = SessionLocal()
     try:
-        meeting = db.query(Meeting).filter_by(filename=filename).first()
+        meeting = db.query(Meeting).filter_by(filename=filename, org_id=org_id).first()
         if not meeting:
             return False
         db.delete(meeting)
         db.commit()
-        _invalidate_cache()
+        _invalidate_cache(org_id)
         return True
     except Exception:
         db.rollback()
@@ -157,7 +162,6 @@ def delete_meeting(filename: str) -> bool:
 # ── Search helpers ─────────────────────────────────────────────────────────────
 
 def _build_search_text(meeting: Dict[str, Any]) -> str:
-    """Build a normalised searchable string for a meeting dict."""
     if "_search_text" in meeting:
         return meeting["_search_text"]
 
@@ -184,11 +188,12 @@ def _build_search_text(meeting: Dict[str, Any]) -> str:
 def search_meetings_by_person(
     person_name: str,
     meetings: Optional[List[Dict[str, Any]]] = None,
+    org_id: int | None = None,
 ) -> List[Dict[str, Any]]:
     if not person_name:
         return []
     if meetings is None:
-        meetings = get_all_meetings()
+        meetings = get_all_meetings(org_id)
 
     target = person_name.strip().lower()
     matches = []
@@ -205,9 +210,10 @@ def search_meetings_by_person(
 def search_meetings_by_date(
     target_date: date,
     meetings: Optional[List[Dict[str, Any]]] = None,
+    org_id: int | None = None,
 ) -> List[Dict[str, Any]]:
     if meetings is None:
-        meetings = get_all_meetings()
+        meetings = get_all_meetings(org_id)
     target_str = target_date.strftime("%Y-%m-%d")
     return [m for m in meetings if m.get("meeting_date", "") == target_str]
 
@@ -215,11 +221,12 @@ def search_meetings_by_date(
 def search_meetings_by_keywords(
     keywords: List[str],
     meetings: Optional[List[Dict[str, Any]]] = None,
+    org_id: int | None = None,
 ) -> List[Dict[str, Any]]:
     if not keywords:
         return []
     if meetings is None:
-        meetings = get_all_meetings()
+        meetings = get_all_meetings(org_id)
 
     normalized = [kw.strip().lower() for kw in keywords if kw and kw.strip()]
     return [

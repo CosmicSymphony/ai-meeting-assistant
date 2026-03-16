@@ -1,9 +1,10 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.dependencies import get_web_org_id
 from app.services.summarize_service import summarize_meeting
 from app.services.ask_meetings_service import ask_meetings
 from app.services.ask_single_meeting_service import ask_single_meeting_question
@@ -21,6 +22,7 @@ MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25 MB
 
 def render_page(
     request: Request,
+    org_id: int,
     summary_result=None,
     ask_result=None,
     ask_question: str = None,
@@ -34,7 +36,7 @@ def render_page(
     email_error: str = None,
     record_error: str = None,
 ):
-    meetings = get_recent_meetings()
+    meetings = get_recent_meetings(org_id)
     return templates.TemplateResponse(
         "index.html",
         {
@@ -57,57 +59,57 @@ def render_page(
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return render_page(request)
+def home(request: Request, org_id: int = Depends(get_web_org_id)):
+    return render_page(request, org_id)
 
 
 @router.post("/summarize", response_class=HTMLResponse)
-async def summarize_transcript(request: Request, file: UploadFile = File(...)):
+async def summarize_transcript(request: Request, file: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
         content = await file.read()
         transcript_text = content.decode("utf-8")
-        result = await summarize_meeting(transcript_text)
-        return render_page(request, summary_result=result, scroll_to="card-summary-result")
+        result = await summarize_meeting(transcript_text, org_id)
+        return render_page(request, org_id, summary_result=result, scroll_to="card-summary-result")
     except Exception as e:
-        return render_page(request, summarize_error=str(e), scroll_to="card-summarize")
+        return render_page(request, org_id, summarize_error=str(e), scroll_to="card-summarize")
 
 
 @router.post("/transcribe-audio", response_class=HTMLResponse)
-async def transcribe_audio_file(request: Request, file: UploadFile = File(...)):
+async def transcribe_audio_file(request: Request, file: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
         content = await file.read()
 
         if len(content) > MAX_AUDIO_SIZE:
-            return render_page(request, audio_error="File too large. Maximum size is 25MB.", scroll_to="card-audio")
+            return render_page(request, org_id, audio_error="File too large. Maximum size is 25MB.", scroll_to="card-audio")
 
         transcript_text, _ = await transcribe_audio(content, file.filename)
-        result = await summarize_meeting(transcript_text)
-        return render_page(request, summary_result=result, scroll_to="card-summary-result")
+        result = await summarize_meeting(transcript_text, org_id)
+        return render_page(request, org_id, summary_result=result, scroll_to="card-summary-result")
     except Exception as e:
-        return render_page(request, audio_error=str(e), scroll_to="card-audio")
+        return render_page(request, org_id, audio_error=str(e), scroll_to="card-audio")
 
 
 @router.post("/transcribe-only", response_class=HTMLResponse)
-async def transcribe_only(request: Request, file: UploadFile = File(...)):
+async def transcribe_only(request: Request, file: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
         content = await file.read()
 
         if len(content) > MAX_AUDIO_SIZE:
-            return render_page(request, audio_error="File too large. Maximum size is 25MB.", scroll_to="card-audio")
+            return render_page(request, org_id, audio_error="File too large. Maximum size is 25MB.", scroll_to="card-audio")
 
         transcript_text, detected_language = await transcribe_audio(content, file.filename)
-        return render_page(request, transcript_preview=transcript_text, detected_language=detected_language, scroll_to="card-transcript")
+        return render_page(request, org_id, transcript_preview=transcript_text, detected_language=detected_language, scroll_to="card-transcript")
     except Exception as e:
-        return render_page(request, audio_error=str(e), scroll_to="card-audio")
+        return render_page(request, org_id, audio_error=str(e), scroll_to="card-audio")
 
 
 @router.post("/ask", response_class=HTMLResponse)
-async def ask_question(request: Request, question: str = Form(...)):
+async def ask_question(request: Request, question: str = Form(...), org_id: int = Depends(get_web_org_id)):
     try:
-        result = await ask_meetings(question)
-        return render_page(request, ask_result=result, ask_question=question, scroll_to="card-ask")
+        result = await ask_meetings(question, org_id)
+        return render_page(request, org_id, ask_result=result, ask_question=question, scroll_to="card-ask")
     except Exception as e:
-        return render_page(request, ask_error=str(e), ask_question=question, scroll_to="card-ask")
+        return render_page(request, org_id, ask_error=str(e), ask_question=question, scroll_to="card-ask")
 
 
 @router.post("/generate-email", response_class=HTMLResponse)
@@ -117,6 +119,7 @@ async def generate_email(
     audience: str = Form(default="team"),
     signature_name: str = Form(default=""),
     meeting_file: str = Form(default=""),
+    org_id: int = Depends(get_web_org_id),
 ):
     try:
         meeting_file = meeting_file.strip()
@@ -124,28 +127,30 @@ async def generate_email(
         if meeting_file:
             result = await generate_followup_email(
                 meeting_file=meeting_file,
+                org_id=org_id,
                 tone=tone,
                 audience=audience,
                 signature=signature,
             )
         else:
             result = await generate_followup_email_latest(
+                org_id=org_id,
                 tone=tone,
                 audience=audience,
                 signature=signature,
             )
-        return render_page(request, email_result=result, scroll_to="card-email")
+        return render_page(request, org_id, email_result=result, scroll_to="card-email")
     except Exception as e:
-        return render_page(request, email_error=str(e), scroll_to="card-email")
+        return render_page(request, org_id, email_error=str(e), scroll_to="card-email")
 
 
 @router.post("/record-meeting", response_class=HTMLResponse)
-async def record_meeting(request: Request, audio: UploadFile = File(...)):
+async def record_meeting(request: Request, audio: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
         content = await audio.read()
 
         if len(content) > MAX_AUDIO_SIZE:
-            return render_page(request, error="Recording too large. Maximum size is 25MB.")
+            return render_page(request, org_id, record_error="Recording too large. Maximum size is 25MB.", scroll_to="card-record")
 
         # Save audio file to recordings/ folder
         RECORDINGS_DIR.mkdir(exist_ok=True)
@@ -157,14 +162,14 @@ async def record_meeting(request: Request, audio: UploadFile = File(...)):
 
         # Transcribe then summarise (same pipeline as audio upload)
         transcript_text, _ = await transcribe_audio(content, audio_filename)
-        result = await summarize_meeting(transcript_text)
+        result = await summarize_meeting(transcript_text, org_id)
 
         # Mark it as a browser recording in the DB
         from app.database import SessionLocal
         from app.models import Meeting
         db = SessionLocal()
         try:
-            meeting = db.query(Meeting).filter_by(filename=result.get("_file")).first()
+            meeting = db.query(Meeting).filter_by(filename=result.get("_file"), org_id=org_id).first()
             if meeting:
                 meeting.source = "browser_recording"
                 meeting.audio_path = str(audio_path)
@@ -172,14 +177,14 @@ async def record_meeting(request: Request, audio: UploadFile = File(...)):
         finally:
             db.close()
 
-        return render_page(request, summary_result=result, scroll_to="card-summary-result")
+        return render_page(request, org_id, summary_result=result, scroll_to="card-summary-result")
     except Exception as e:
-        return render_page(request, record_error=str(e), scroll_to="card-record")
+        return render_page(request, org_id, record_error=str(e), scroll_to="card-record")
 
 
 @router.get("/meeting/{meeting_file}", response_class=HTMLResponse)
-def meeting_detail(request: Request, meeting_file: str):
-    meeting = get_meeting_by_file(meeting_file)
+def meeting_detail(request: Request, meeting_file: str, org_id: int = Depends(get_web_org_id)):
+    meeting = get_meeting_by_file(meeting_file, org_id)
 
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
@@ -201,8 +206,9 @@ async def ask_about_single_meeting(
     request: Request,
     meeting_file: str,
     question: str = Form(...),
+    org_id: int = Depends(get_web_org_id),
 ):
-    meeting = get_meeting_by_file(meeting_file)
+    meeting = get_meeting_by_file(meeting_file, org_id)
 
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
@@ -234,7 +240,7 @@ async def ask_about_single_meeting(
 
 
 @router.post("/meeting/{meeting_file}/delete", response_class=HTMLResponse)
-async def delete_meeting_route(request: Request, meeting_file: str):
-    delete_meeting(meeting_file)
+async def delete_meeting_route(request: Request, meeting_file: str, org_id: int = Depends(get_web_org_id)):
+    delete_meeting(meeting_file, org_id)
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/web/", status_code=303)

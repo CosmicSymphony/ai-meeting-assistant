@@ -95,11 +95,12 @@ def parse_email_response(text: str, meeting_title: str) -> dict:
 
 async def generate_followup_email(
     meeting_file: str,
+    org_id: int,
     tone: str = "professional",
     audience: str = "team",
     signature: str | None = None
 ) -> dict:
-    meeting_data = load_meeting_from_file(meeting_file)
+    meeting_data = load_meeting_from_file(meeting_file, org_id)
 
     prompt = build_followup_email_prompt(
         meeting_data=meeting_data,
@@ -118,14 +119,16 @@ async def generate_followup_email(
 
 
 async def generate_followup_email_latest(
+    org_id: int,
     tone: str = "professional",
     audience: str = "team",
     signature: str | None = None
 ) -> dict:
-    latest_meeting_file = get_latest_meeting_file()
+    latest_meeting_file = get_latest_meeting_file(org_id)
 
     return await generate_followup_email(
         meeting_file=latest_meeting_file,
+        org_id=org_id,
         tone=tone,
         audience=audience,
         signature=signature

@@ -122,15 +122,15 @@ def slugify(text: str) -> str:
     return text[:50].strip("_")
 
 
-def save_summary_to_db(summary_data: dict) -> dict:
+def save_summary_to_db(summary_data: dict, org_id: int) -> dict:
     """Save meeting summary to the database and return the dict with _file set."""
-    meeting = save_meeting(summary_data)
+    meeting = save_meeting(summary_data, org_id)
     summary_data["_file"] = meeting.filename
     summary_data["id"] = meeting.id
     return summary_data
 
 
-async def summarize_meeting(transcript_text: str):
+async def summarize_meeting(transcript_text: str, org_id: int):
     provider = get_llm_provider()
 
     detected_participants = extract_participants_from_transcript(transcript_text)
@@ -161,6 +161,6 @@ async def summarize_meeting(transcript_text: str):
 
     summary_data["meeting_timestamp"] = now.strftime("%Y-%m-%d %H:%M:%S")
 
-    save_summary_to_db(summary_data)
+    save_summary_to_db(summary_data, org_id)
 
     return summary_data
