@@ -48,6 +48,27 @@ async def get_bot_transcript(bot_id: str) -> list:
         return data
 
 
+async def get_bot_recording_url(bot_id: str) -> str | None:
+    """
+    Get the audio/video recording download URL for a completed bot.
+    Recall.ai returns recording URLs in the bot object under `recordings` or `video_url`.
+    Returns the first available download URL, or None if not available.
+    """
+    bot_data = await get_bot(bot_id)
+
+    # Try `recordings` array first (newer Recall.ai API)
+    recordings = bot_data.get("recordings") or []
+    for rec in recordings:
+        url = rec.get("media_shortcuts", {}).get("video_mixed", {}).get("data", {}).get("download_url")
+        if not url:
+            url = rec.get("download_url")
+        if url:
+            return url
+
+    # Fallback: top-level video_url field
+    return bot_data.get("video_url") or None
+
+
 def format_transcript(raw_transcript: list) -> str:
     """
     Convert Recall.ai transcript segments into speaker-labelled text
@@ -74,7 +95,9 @@ def get_bot_status_label(status_code: str) -> str:
         "in_waiting_room":        "In waiting room…",
         "in_call_not_recording":  "In call (not recording yet)",
         "in_call_recording":      "Recording…",
-        "call_ended":             "Call ended, processing…",
-        "done":                   "Done",
-        "fatal":                  "Failed",
+        "call_ended":             "Call ended",
+        "processing":             "Generating transcript and summary…",
+        "done":                   "Summary ready ✓",
+        "fatal":                  "Failed (bot error)",
+        "failed":                 "Failed (processing error)",
     }.get(status_code, status_code)

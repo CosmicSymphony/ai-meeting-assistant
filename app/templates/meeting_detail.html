@@ -143,7 +143,7 @@
       </button>
       <div class="transcript-body" id="transcript-body" style="display:none;">
         <div class="divider" style="margin-top:0;"></div>
-        <pre class="transcript-pre">{{ meeting.transcript }}</pre>
+        <pre class="transcript-pre">{{ meeting.transcript | replace('\nSpeaker', '\n\nSpeaker') }}</pre>
       </div>
     </div>
     {% endif %}
@@ -201,6 +201,16 @@
       form.querySelector('button[type=submit]').disabled = true;
     }
 
+    function boldSpeakers() {
+      const pre = document.querySelector('.transcript-pre');
+      if (!pre) return;
+      const escaped = pre.textContent
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      pre.innerHTML = escaped.replace(/^(Speaker\s+\w+:)/gm, '<strong>$1</strong>');
+    }
+
     function toggleTranscript(btn) {
       const body = document.getElementById('transcript-body');
       const chevron = btn.querySelector('.transcript-chevron');
@@ -210,6 +220,7 @@
       chevron.style.transform = expanded ? '' : 'rotate(90deg)';
       subtitle.textContent = expanded ? 'Click to expand' : 'Click to collapse';
       btn.setAttribute('aria-expanded', !expanded);
+      if (!expanded) boldSpeakers();
     }
   </script>
 </body>

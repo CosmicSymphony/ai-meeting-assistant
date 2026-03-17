@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, Request, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -8,8 +8,9 @@ from app.dependencies import get_web_org_id
 from app.models import BotSession, Meeting
 from app.services.recall_service import (
     create_bot, get_bot, get_bot_transcript,
-    format_transcript, get_bot_status_label,
+    format_transcript, get_bot_status_label, get_bot_recording_url,
 )
+from app.services.transcription_service import transcribe_from_url
 from app.services.summarize_service import summarize_meeting
 
 router = APIRouter()
@@ -65,10 +66,24 @@ async def join_meeting(
         })
 
 
+# ── Raw debug endpoint ─────────────────────────────────────────────────────────
+
+@router.get("/bot/{bot_id}/debug")
+async def bot_debug(bot_id: str):
+    """Return raw Recall.ai bot data for debugging."""
+    bot_data = await get_bot(bot_id)
+    return bot_data
+
+
 # ── Bot status page (auto-refreshes until done) ────────────────────────────────
 
 @router.get("/bot/{bot_id}", response_class=HTMLResponse)
-async def bot_status_page(request: Request, bot_id: str, org_id: int = Depends(get_web_org_id)):
+async def bot_status_page(
+    request: Request,
+    bot_id: str,
+    background_tasks: BackgroundTasks,
+    org_id: int = Depends(get_web_org_id),
+):
     db = SessionLocal()
     try:
         session = db.query(BotSession).filter_by(bot_id=bot_id, org_id=org_id).first()
@@ -80,16 +95,23 @@ async def bot_status_page(request: Request, bot_id: str, org_id: int = Depends(g
             bot_data = await get_bot(bot_id)
             recall_status = bot_data.get("status_changes", [{}])[-1].get("code", "unknown") \
                 if bot_data.get("status_changes") else bot_data.get("status", "unknown")
-
-            session.status = recall_status
-            db.commit()
         except Exception:
             recall_status = session.status
 
-        # If done and not yet processed → process now
-        meeting_data = None
-        if recall_status in _DONE_STATUSES and session.meeting_id is None:
-            meeting_data = await _process_bot(session, org_id, db)
+        # Kick off background processing — check BEFORE updating session.status
+        if (recall_status in _DONE_STATUSES
+                and session.meeting_id is None
+                and session.status not in ("processing", "done", "failed")):
+            session.status = "processing"
+            db.commit()
+            background_tasks.add_task(_process_bot_background, session.bot_id, session.org_id)
+        elif session.status not in ("processing", "done", "failed"):
+            # Sync Recall.ai status into DB (only when not in an app-managed terminal state)
+            session.status = recall_status
+            db.commit()
+
+        # Use DB status as the display status (captures "processing" state)
+        display_status = session.status
 
         # If already processed → load the saved meeting
         saved_meeting = None
@@ -99,8 +121,8 @@ async def bot_status_page(request: Request, bot_id: str, org_id: int = Depends(g
         return templates.TemplateResponse("bot_status.html", {
             "request": request,
             "session": session,
-            "status_label": get_bot_status_label(recall_status),
-            "recall_status": recall_status,
+            "status_label": get_bot_status_label(display_status),
+            "recall_status": display_status,
             "saved_meeting": saved_meeting,
             "error": None,
         })
@@ -111,11 +133,7 @@ async def bot_status_page(request: Request, bot_id: str, org_id: int = Depends(g
 # ── Recall.ai webhook ──────────────────────────────────────────────────────────
 
 @router.post("/webhook")
-async def recall_webhook(request: Request):
-    """
-    Recall.ai calls this endpoint when bot status changes.
-    Processes the transcript when the call ends.
-    """
+async def recall_webhook(request: Request, background_tasks: BackgroundTasks):
     payload = await request.json()
     event = payload.get("event", "")
     data = payload.get("data", {})
@@ -137,12 +155,16 @@ async def recall_webhook(request: Request):
         if not session:
             return {"ok": True}
 
-        if status_code:
+        if status_code and session.status not in ("processing", "failed"):
             session.status = status_code
             db.commit()
 
-        if status_code in _DONE_STATUSES and session.meeting_id is None:
-            await _process_bot(session, session.org_id, db)
+        if (status_code in _DONE_STATUSES
+                and session.meeting_id is None
+                and session.status not in ("processing", "done", "failed")):
+            session.status = "processing"
+            db.commit()
+            background_tasks.add_task(_process_bot_background, bot_id, session.org_id)
 
     finally:
         db.close()
@@ -150,30 +172,65 @@ async def recall_webhook(request: Request):
     return {"ok": True}
 
 
-# ── Shared processing helper ───────────────────────────────────────────────────
+# ── Background processing ──────────────────────────────────────────────────────
 
-async def _process_bot(session: BotSession, org_id: int, db) -> dict | None:
-    """Fetch transcript from Recall.ai, summarize, and save as a Meeting."""
+async def _process_bot_background(bot_id: str, org_id: int):
+    """Run in background: fetch transcript, summarize, save Meeting."""
+    print(f"[Recall] Starting background processing for bot {bot_id}")
+    db = SessionLocal()
     try:
-        raw = await get_bot_transcript(session.bot_id)
-        transcript_text = format_transcript(raw)
+        session = db.query(BotSession).filter_by(bot_id=bot_id).first()
+        if not session:
+            print(f"[Recall] No session found for bot {bot_id}")
+            return
 
+        # Try Recall.ai's own real-time transcript first
+        print(f"[Recall] Fetching transcript for bot {bot_id}...")
+        raw = await get_bot_transcript(bot_id)
+        print(f"[Recall] Recall.ai transcript segments: {len(raw)}")
+        transcript_text = format_transcript(raw)
+        print(f"[Recall] Formatted transcript length: {len(transcript_text)} chars")
+
+        # If empty, fall back to AssemblyAI using the recording file
         if not transcript_text.strip():
+            print("[Recall] Recall.ai transcript empty, trying AssemblyAI fallback...")
+            recording_url = await get_bot_recording_url(bot_id)
+            print(f"[Recall] Recording URL: {recording_url}")
+            if recording_url:
+                try:
+                    transcript_text, lang = await transcribe_from_url(recording_url)
+                    print(f"[Recall] AssemblyAI transcription done. Language: {lang}, Length: {len(transcript_text)} chars")
+                except Exception as e:
+                    print(f"[Recall] AssemblyAI transcription failed: {e}")
+            else:
+                print("[Recall] No recording URL available.")
+
+        if not transcript_text or not transcript_text.strip():
+            print(f"[Recall] No transcript available for bot {bot_id} — marking failed.")
             session.status = "failed"
             db.commit()
-            return None
+            return
 
+        print(f"[Recall] Generating summary for bot {bot_id}...")
         summary = await summarize_meeting(transcript_text, org_id)
 
-        # Link the bot session to the saved meeting
-        meeting = db.query(Meeting).filter_by(filename=summary.get("_file"), org_id=org_id).first()
-        if meeting:
-            meeting.source = "teams"
-            session.meeting_id = meeting.id
-            db.commit()
-
-        return summary
-    except Exception as e:
-        session.status = "failed"
+        meeting_id = summary.get("id")
+        if meeting_id:
+            meeting = db.query(Meeting).filter_by(id=meeting_id).first()
+            if meeting:
+                meeting.source = "teams"
+                session.meeting_id = meeting.id
+        session.status = "done"
         db.commit()
-        raise e
+        print(f"[Recall] Meeting processed successfully: {summary.get('_file')} (id={meeting_id})")
+
+    except Exception as e:
+        import traceback
+        print(f"[Recall] Processing EXCEPTION for bot {bot_id}: {e}")
+        traceback.print_exc()
+        session = db.query(BotSession).filter_by(bot_id=bot_id).first()
+        if session:
+            session.status = "failed"
+            db.commit()
+    finally:
+        db.close()

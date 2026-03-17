@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bot Status · AI Meeting Assistant</title>
   <link rel="stylesheet" href="/static/style.css">
-  {% if session and recall_status not in ["done", "fatal", "failed"] %}
+  {% if session and recall_status not in ["done", "call_ended", "fatal", "failed"] %}
   <meta http-equiv="refresh" content="5">
   {% endif %}
 </head>
@@ -47,6 +47,7 @@
         <div class="card-icon" style="background:#e0f2fe;">
           {% if recall_status == "done" %}✅
           {% elif recall_status in ["fatal", "failed"] %}❌
+          {% elif recall_status == "processing" %}⏳
           {% else %}🔄{% endif %}
         </div>
         <div>
@@ -55,17 +56,22 @@
         </div>
       </div>
 
-      {% if recall_status not in ["done", "fatal", "failed"] %}
+      {% if recall_status not in ["done", "call_ended", "fatal", "failed"] %}
       <div style="display:flex; align-items:center; gap:12px; margin-top:12px; color:var(--text-muted); font-size:0.88rem;">
         <div class="spinner"></div>
         This page refreshes automatically every 5 seconds…
       </div>
       {% endif %}
 
-      {% if recall_status in ["fatal", "failed"] %}
+      {% if recall_status == "fatal" %}
       <div class="error-block" style="margin-top:12px;">
         The bot encountered an error. This can happen if the meeting URL is invalid,
         the meeting hasn't started yet, or the bot was not admitted from the waiting room.
+      </div>
+      {% elif recall_status == "failed" %}
+      <div class="error-block" style="margin-top:12px;">
+        Could not generate a summary. This usually means no speech was detected in the recording —
+        make sure participants are speaking during the meeting.
       </div>
       {% endif %}
     </div>
@@ -84,7 +90,7 @@
         View Meeting Summary →
       </a>
     </div>
-    {% elif recall_status == "done" %}
+    {% elif recall_status in ["done", "processing"] %}
     <div class="card">
       <div style="display:flex; align-items:center; gap:12px; color:var(--text-muted); font-size:0.88rem;">
         <div class="spinner"></div> Processing transcript and generating summary…
