@@ -109,10 +109,6 @@
           <input type="url" name="meeting_url" placeholder="https://teams.microsoft.com/l/meetup-join/…" required
                  style="width:100%; box-sizing:border-box;">
         </div>
-        <div class="form-group">
-          <input type="text" name="meeting_name" placeholder="Meeting name (optional)"
-                 style="width:100%; box-sizing:border-box;">
-        </div>
         <button type="submit" class="btn btn-primary">🚀 Send Bot to Meeting</button>
       </form>
       <div class="loading-msg" id="load-join" style="display:none;">
@@ -431,7 +427,53 @@
 
     function showFilename(input, labelId) {
       const label = document.getElementById(labelId);
-      label.textContent = input.files[0] ? input.files[0].name : 'No file chosen';
+      const area = input.closest('.upload-area');
+      const icon = area.querySelector('.upload-icon');
+      const uploadLabel = area.querySelector('.upload-label');
+      if (input.files[0]) {
+        label.textContent = input.files[0].name;
+        if (icon) { icon.style.display = 'none'; }
+        if (uploadLabel) { uploadLabel.style.display = 'none'; }
+        area.style.borderColor = '#22c55e';
+        area.style.background = '#f0fdf4';
+        area.style.cursor = 'default';
+        area.style.pointerEvents = 'none';
+        area.dataset.ready = '1';
+        let tick = area.querySelector('.upload-tick');
+        if (!tick) {
+          tick = document.createElement('div');
+          tick.className = 'upload-tick';
+          tick.textContent = '✔ File ready';
+          area.insertBefore(tick, label);
+        }
+        let removeBtn = area.querySelector('.upload-remove');
+        if (!removeBtn) {
+          removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'upload-remove';
+          removeBtn.textContent = '✕ Remove file';
+          removeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            input.value = '';
+            showFilename(input, labelId);
+          });
+          area.appendChild(removeBtn);
+        }
+      } else {
+        label.textContent = 'No file chosen';
+        if (icon) { icon.style.display = ''; }
+        if (uploadLabel) { uploadLabel.style.display = ''; }
+        area.style.borderColor = '';
+        area.style.background = '';
+        area.style.cursor = '';
+        area.style.pointerEvents = '';
+        delete area.dataset.ready;
+        const tick = area.querySelector('.upload-tick');
+        if (tick) tick.remove();
+        const removeBtn = area.querySelector('.upload-remove');
+        if (removeBtn) removeBtn.remove();
+      }
     }
 
     // Assign a File object to an input's file list

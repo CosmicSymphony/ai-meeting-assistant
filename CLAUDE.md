@@ -69,6 +69,13 @@ FastAPI web app that transcribes, summarises, and queries meeting recordings.
 - `Meeting` — transcript, summary, participants, key_decisions, action_items, `org_id`, `source`
 - `BotSession` — bot_id, status, meeting_id (FK set when processed), org_id
 
+## UI Notes
+- `input[type="url"]` is explicitly styled in `style.css` alongside `input[type="text"]` — both share the same base/focus styles
+- Upload areas (`.upload-area`) disable `pointer-events` once a file is selected to prevent accidental re-click; restored on remove
+- `showFilename()` in `index.html` handles all upload state: hides drag/drop label+icon, shows green tick + filename + remove button, locks area
+- Meeting name input removed from the join-meeting form — backend defaults to `"Teams Meeting"`
+- Meeting detail badges: first = date, second = time only (split from `meeting_timestamp`)
+
 ## Planned Next
 - Upgrade AssemblyAI to `universal-3-pro` for better accuracy
 - Deploy to Railway (PostgreSQL + public webhook URL)

@@ -33,7 +33,7 @@
         <span class="badge">📅 {{ meeting.meeting_date }}</span>
         {% endif %}
         {% if meeting.meeting_timestamp %}
-        <span class="badge">🕐 {{ meeting.meeting_timestamp }}</span>
+        <span class="badge">🕐 {{ meeting.meeting_timestamp.split(' ')[1] if ' ' in meeting.meeting_timestamp else meeting.meeting_timestamp }}</span>
         {% endif %}
         {% if meeting.participants %}
         <span class="badge">👥 {{ meeting.participants | length }} participants</span>
