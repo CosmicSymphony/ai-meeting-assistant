@@ -57,7 +57,10 @@ async def _run_transcription(audio_url: str = None, file_bytes: bytes = None, la
             if status == "completed":
                 break
             if status == "error":
-                raise RuntimeError(f"AssemblyAI transcription failed: {data.get('error')}")
+                api_error = data.get("error") or ""
+                if "no spoken audio" in api_error.lower() or "language_detection" in api_error.lower():
+                    raise RuntimeError("Transcription failed: no spoken audio was detected in this file.")
+                raise RuntimeError(f"Transcription failed: {api_error}")
 
             await asyncio.sleep(3)
 

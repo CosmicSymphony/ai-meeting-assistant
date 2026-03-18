@@ -1,4 +1,6 @@
-# AI Meeting Assistant — Claude Context
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
 FastAPI web app that transcribes, summarises, and queries meeting recordings.
@@ -12,7 +14,7 @@ FastAPI web app that transcribes, summarises, and queries meeting recordings.
 ## Tech Stack
 - **Backend:** FastAPI + SQLAlchemy ORM (SQLite locally, PostgreSQL via `DATABASE_URL` env var)
 - **Transcription:** AssemblyAI REST API (`/v2/` endpoints)
-- **LLM:** OpenAI gpt-4o
+- **LLM:** OpenAI gpt-4o via `app/llm/openai_provider.py` (abstracted behind `BaseProvider`)
 - **Meeting bot:** Recall.ai (Teams integration working end-to-end)
 - **Templates:** Jinja2, static CSS at `app/static/style.css`
 
@@ -22,6 +24,19 @@ FastAPI web app that transcribes, summarises, and queries meeting recordings.
 - `RECALLAI_API_KEY` — set (Asia Pacific region: `ap-northeast-1`)
 - `DATABASE_URL` — blank = SQLite; set for PostgreSQL
 - `WEBHOOK_BASE_URL` — blank locally; set on deployment for Recall.ai webhooks
+
+## Architecture
+**Service-Repository-Model pattern:**
+- `app/models.py` — SQLAlchemy ORM models
+- `app/repositories/` — data access with 30s in-memory cache per org
+- `app/services/` — business logic and external API calls
+- `app/routes/` — FastAPI endpoints delegating to services
+
+**Multi-tenancy:** Every `Meeting` and `BotSession` is scoped to an `Organisation` by `org_id`. A default org is auto-created at startup. Web UI uses the default org; REST API uses `X-API-Key` header.
+
+**LLM abstraction:** `app/llm/provider_factory.py` returns a singleton `BaseProvider`. Currently hardcoded to OpenAI but designed for swappable backends.
+
+**Database migrations:** Alembic for PostgreSQL; SQLite schema changes go in the `_migrate()` function in `app/database.py`.
 
 ## Bot Flow (end-to-end, working as of 2026-03-17)
 1. User pastes Teams meeting URL → app calls Recall.ai to send bot
@@ -50,9 +65,11 @@ FastAPI web app that transcribes, summarises, and queries meeting recordings.
 
 ## Key Files
 - `app/routes/recall.py` — bot join, status page, webhook, background processing
+- `app/routes/web.py` — dashboard, upload, transcription, Q&A, email generation
 - `app/services/recall_service.py` — Recall.ai API calls, transcript formatting, status labels
 - `app/services/transcription_service.py` — AssemblyAI upload + poll
 - `app/services/summarize_service.py` — OpenAI summarisation
+- `app/services/ask_meetings_service.py` — multi-meeting Q&A with date/person/keyword search
 - `app/templates/bot_status.html` — bot status page (auto-refresh, spinner states)
 - `app/templates/meeting_detail.html` — meeting summary + transcript view
 
