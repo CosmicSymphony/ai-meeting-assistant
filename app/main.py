@@ -23,6 +23,19 @@ from app.repositories.organisation_repository import get_or_create_default_org
 from app.config import settings
 
 
+async def _setup_graph_subscription() -> None:
+    """Create the Graph calendar subscription after the server is fully started."""
+    from app.services.graph_service import create_calendar_subscription
+    from app.scheduler import set_subscription_id
+    notification_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/calendar/webhook"
+    try:
+        sub = await create_calendar_subscription(notification_url)
+        set_subscription_id(sub["id"])
+        print(f"[Graph] Calendar subscription active: {sub['id']}")
+    except Exception as e:
+        print(f"[Graph] Warning: could not create calendar subscription: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialise DB and default org
@@ -42,17 +55,17 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     reschedule_pending_on_startup()
 
-    # Set up Microsoft Graph calendar subscription (only if Azure creds are configured)
+    # Schedule Graph subscription creation 15s after startup so the server is ready to validate
     if settings.WEBHOOK_BASE_URL and settings.AZURE_CLIENT_ID:
-        from app.services.graph_service import create_calendar_subscription
-        from app.scheduler import set_subscription_id
-        notification_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/calendar/webhook"
-        try:
-            sub = await create_calendar_subscription(notification_url)
-            set_subscription_id(sub["id"])
-            print(f"[Graph] Calendar subscription active: {sub['id']}")
-        except Exception as e:
-            print(f"[Graph] Warning: could not create calendar subscription: {e}")
+        from datetime import datetime, timedelta, timezone
+        from apscheduler.triggers.date import DateTrigger
+        fire_at = datetime.now(timezone.utc) + timedelta(seconds=15)
+        scheduler.add_job(
+            _setup_graph_subscription,
+            trigger=DateTrigger(run_date=fire_at),
+            id="graph_subscription_setup",
+            replace_existing=True,
+        )
 
     yield
 
