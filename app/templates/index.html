@@ -297,9 +297,19 @@
       </div>
 
       {% if summary_result.meeting_summary %}
-      <p style="font-size:0.9rem; line-height:1.7; color: var(--text); margin-bottom:18px;">
-        {{ summary_result.meeting_summary }}
-      </p>
+        {% set bullets = summary_result.meeting_summary.split('•') %}
+        {% if bullets | length > 1 %}
+          <ul style="font-size:0.9rem; line-height:1.75; color:var(--text); padding-left:1.2rem; margin-bottom:18px;">
+            {% for bullet in bullets %}
+              {% set item = bullet.strip() %}
+              {% if item %}
+                <li style="margin-bottom:6px;">{{ item }}</li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p style="font-size:0.9rem; line-height:1.7; color: var(--text); margin-bottom:18px;">{{ summary_result.meeting_summary }}</p>
+        {% endif %}
       {% endif %}
 
       {% if summary_result.participants %}
