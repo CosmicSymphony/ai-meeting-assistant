@@ -98,14 +98,6 @@ async def _handle_calendar_notification(event_id: str) -> None:
         subject = event.get("subject", "Teams Meeting")
         organizer_email = ((event.get("organizer") or {}).get("emailAddress") or {}).get("address")
 
-        # Always accept the invite
-        await accept_event(event_id)
-        print(f"[Calendar] Accepted invite: {subject}")
-
-        if not join_url:
-            print(f"[Calendar] No Teams join URL found for '{subject}' — accepted but no bot scheduled")
-            return
-
         start = event.get("start", {})
         start_dt = _parse_graph_datetime(start.get("dateTime", ""), start.get("timeZone", "UTC"))
 
@@ -127,6 +119,10 @@ async def _handle_calendar_notification(event_id: str) -> None:
                 sched_id = existing.id
                 print(f"[Calendar] Updated ScheduledMeeting id={sched_id}")
             else:
+                # Only accept on first notification
+                if join_url:
+                    await accept_event(event_id)
+                    print(f"[Calendar] Accepted invite: {subject}")
                 sched = ScheduledMeeting(
                     org_id=org_id,
                     graph_event_id=event_id,
@@ -143,6 +139,10 @@ async def _handle_calendar_notification(event_id: str) -> None:
                 print(f"[Calendar] Created ScheduledMeeting id={sched_id} for '{subject}' at {start_dt}")
         finally:
             db.close()
+
+        if not join_url:
+            print(f"[Calendar] No Teams join URL found for '{subject}' — no bot scheduled")
+            return
 
         schedule_bot_deployment(sched_id, org_id, join_url, subject,
                                 start_dt.replace(tzinfo=timezone.utc))
