@@ -114,7 +114,7 @@ async def accept_event(event_id: str) -> None:
         resp = await client.post(
             f"{_GRAPH_BASE}/users/{settings.BOT_EMAIL}/events/{event_id}/accept",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json={"sendResponse": False, "comment": ""},
+            json={"sendResponse": True, "comment": ""},
         )
         if resp.status_code == 400:
             # Shared mailboxes often auto-accept invites — ignore if already accepted
