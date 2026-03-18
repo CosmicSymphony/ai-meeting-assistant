@@ -1,7 +1,9 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from app.routes.web import router as web_router
 from app.routes.recall import router as recall_router
+from app.routes.calendar import router as calendar_router
 from pydantic import BaseModel
 from app.services.summarize_service import summarize_meeting
 from app.services.ask_meetings_service import ask_meetings
@@ -15,28 +17,56 @@ from app.services.email_generation_service import (
     generate_followup_email_latest,
 )
 from app.dependencies import get_current_org_api
-from app.database import init_db
-from app.repositories.organisation_repository import get_or_create_default_org
-
-init_db()
-_default_org = get_or_create_default_org()
-
-# Assign any legacy meetings (no org_id) to the default org
-from app.database import SessionLocal
+from app.database import init_db, SessionLocal
 from app.models import Meeting as _Meeting
-_db = SessionLocal()
-try:
-    _db.query(_Meeting).filter(_Meeting.org_id == None).update({"org_id": _default_org.id})
-    _db.commit()
-finally:
-    _db.close()
+from app.repositories.organisation_repository import get_or_create_default_org
+from app.config import settings
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialise DB and default org
+    init_db()
+    _default_org = get_or_create_default_org()
+
+    # Assign any legacy meetings (no org_id) to the default org
+    _db = SessionLocal()
+    try:
+        _db.query(_Meeting).filter(_Meeting.org_id == None).update({"org_id": _default_org.id})
+        _db.commit()
+    finally:
+        _db.close()
+
+    # Start APScheduler and reschedule any pending meetings
+    from app.scheduler import scheduler, reschedule_pending_on_startup
+    scheduler.start()
+    reschedule_pending_on_startup()
+
+    # Set up Microsoft Graph calendar subscription (only if Azure creds are configured)
+    if settings.WEBHOOK_BASE_URL and settings.AZURE_CLIENT_ID:
+        from app.services.graph_service import create_calendar_subscription
+        from app.scheduler import set_subscription_id
+        notification_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/calendar/webhook"
+        try:
+            sub = await create_calendar_subscription(notification_url)
+            set_subscription_id(sub["id"])
+            print(f"[Graph] Calendar subscription active: {sub['id']}")
+        except Exception as e:
+            print(f"[Graph] Warning: could not create calendar subscription: {e}")
+
+    yield
+
+    from app.scheduler import scheduler
+    scheduler.shutdown(wait=False)
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(web_router, prefix="/web")
 app.include_router(recall_router, prefix="/recall")
+app.include_router(calendar_router, prefix="/calendar")
 
 
 class MeetingQuestionRequest(BaseModel):

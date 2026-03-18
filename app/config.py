@@ -14,5 +14,11 @@ class Settings:
     DATABASE_URL = os.getenv("DATABASE_URL") or _DEFAULT_SQLITE
     WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "")  # e.g. https://yourapp.railway.app
 
+    # Microsoft Graph / Azure AD (for calendar auto-join)
+    AZURE_TENANT_ID     = os.getenv("AZURE_TENANT_ID")
+    AZURE_CLIENT_ID     = os.getenv("AZURE_CLIENT_ID")
+    AZURE_CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
+    BOT_EMAIL           = os.getenv("BOT_EMAIL", "")
+
 
 settings = Settings()

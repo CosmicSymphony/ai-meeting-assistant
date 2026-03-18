@@ -121,6 +121,23 @@ class Meeting(Base):
         }
 
 
+class ScheduledMeeting(Base):
+    """Tracks a Teams meeting invite received on the bot mailbox calendar."""
+    __tablename__ = "scheduled_meetings"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    org_id          = Column(Integer, ForeignKey("organisations.id"), nullable=True, index=True)
+    graph_event_id  = Column(String, unique=True, nullable=False)
+    subject         = Column(String, nullable=True)
+    start_time      = Column(DateTime, nullable=False)   # naive UTC
+    join_url        = Column(String, nullable=True)
+    organizer_email = Column(String, nullable=True)
+    # Values: scheduled / cancelled / completed / failed
+    status          = Column(String, default="scheduled")
+    bot_session_id  = Column(Integer, ForeignKey("bot_sessions.id"), nullable=True)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+
+
 class BotSession(Base):
     """Tracks a Recall.ai bot sent to a Teams/Zoom/Meet meeting."""
     __tablename__ = "bot_sessions"
