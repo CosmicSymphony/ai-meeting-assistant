@@ -116,10 +116,13 @@ async def _handle_calendar_notification(event_id: str) -> None:
         try:
             existing = db.query(ScheduledMeeting).filter_by(graph_event_id=event_id).first()
             if existing:
+                # Don't reschedule if bot was already deployed or failed
+                if existing.status in ("completed", "failed"):
+                    print(f"[Calendar] Ignoring update for already-{existing.status} meeting id={existing.id}")
+                    return
                 existing.subject = subject
                 existing.start_time = start_dt
                 existing.join_url = join_url
-                existing.status = "scheduled"
                 db.commit()
                 sched_id = existing.id
                 print(f"[Calendar] Updated ScheduledMeeting id={sched_id}")
