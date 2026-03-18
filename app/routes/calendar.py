@@ -104,11 +104,11 @@ async def _handle_calendar_notification(event_id: str) -> None:
         from app.repositories.organisation_repository import get_default_org_id
         org_id = get_default_org_id()
 
+        is_new = False
         db = SessionLocal()
         try:
             existing = db.query(ScheduledMeeting).filter_by(graph_event_id=event_id).first()
             if existing:
-                # Don't reschedule if bot was already deployed or failed
                 if existing.status in ("completed", "failed"):
                     print(f"[Calendar] Ignoring update for already-{existing.status} meeting id={existing.id}")
                     return
@@ -119,10 +119,6 @@ async def _handle_calendar_notification(event_id: str) -> None:
                 sched_id = existing.id
                 print(f"[Calendar] Updated ScheduledMeeting id={sched_id}")
             else:
-                # Only accept on first notification
-                if join_url:
-                    await accept_event(event_id)
-                    print(f"[Calendar] Accepted invite: {subject}")
                 sched = ScheduledMeeting(
                     org_id=org_id,
                     graph_event_id=event_id,
@@ -133,16 +129,28 @@ async def _handle_calendar_notification(event_id: str) -> None:
                     status="scheduled",
                 )
                 db.add(sched)
-                db.commit()
-                db.refresh(sched)
-                sched_id = sched.id
-                print(f"[Calendar] Created ScheduledMeeting id={sched_id} for '{subject}' at {start_dt}")
+                try:
+                    db.commit()
+                    db.refresh(sched)
+                    sched_id = sched.id
+                    is_new = True
+                    print(f"[Calendar] Created ScheduledMeeting id={sched_id} for '{subject}' at {start_dt}")
+                except Exception:
+                    # Another concurrent notification already inserted this event
+                    db.rollback()
+                    print(f"[Calendar] Duplicate notification for event {event_id} — skipping")
+                    return
         finally:
             db.close()
 
         if not join_url:
             print(f"[Calendar] No Teams join URL found for '{subject}' — no bot scheduled")
             return
+
+        # Only send accept on the first successful insert
+        if is_new:
+            await accept_event(event_id)
+            print(f"[Calendar] Accepted invite: {subject}")
 
         schedule_bot_deployment(sched_id, org_id, join_url, subject,
                                 start_dt.replace(tzinfo=timezone.utc))
