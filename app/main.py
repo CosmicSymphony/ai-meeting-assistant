@@ -24,11 +24,31 @@ from app.config import settings
 
 
 async def _setup_graph_subscription() -> None:
-    """Create the Graph calendar subscription after the server is fully started."""
-    from app.services.graph_service import create_calendar_subscription
+    """
+    Set up the Graph calendar subscription after the server is fully started.
+    Reuses an existing subscription if one already points to our webhook URL,
+    deletes stale ones, then creates a fresh one if needed.
+    """
+    from app.services.graph_service import (
+        create_calendar_subscription, list_subscriptions, delete_subscription, renew_calendar_subscription
+    )
     from app.scheduler import set_subscription_id
     notification_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/calendar/webhook"
     try:
+        existing = await list_subscriptions()
+        # Look for a subscription already pointing to our webhook
+        for sub in existing:
+            if sub.get("notificationUrl") == notification_url:
+                # Renew and reuse it
+                renewed = await renew_calendar_subscription(sub["id"])
+                set_subscription_id(renewed["id"])
+                print(f"[Graph] Reusing existing subscription: {renewed['id']}")
+                return
+            else:
+                # Clean up stale subscriptions from old deployments
+                await delete_subscription(sub["id"])
+                print(f"[Graph] Deleted stale subscription: {sub['id']}")
+
         sub = await create_calendar_subscription(notification_url)
         set_subscription_id(sub["id"])
         print(f"[Graph] Calendar subscription active: {sub['id']}")

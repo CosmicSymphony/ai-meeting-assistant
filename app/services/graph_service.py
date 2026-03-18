@@ -32,6 +32,28 @@ def _get_access_token() -> str:
     return result["access_token"]
 
 
+async def list_subscriptions() -> list:
+    """List all active Graph subscriptions for this app."""
+    token = _get_access_token()
+    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+        resp = await client.get(
+            f"{_GRAPH_BASE}/subscriptions",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        resp.raise_for_status()
+        return resp.json().get("value", [])
+
+
+async def delete_subscription(subscription_id: str) -> None:
+    """Delete a Graph subscription."""
+    token = _get_access_token()
+    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+        await client.delete(
+            f"{_GRAPH_BASE}/subscriptions/{subscription_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+
 async def create_calendar_subscription(notification_url: str) -> dict:
     """Subscribe to calendar change notifications for the bot mailbox."""
     from datetime import datetime, timedelta, timezone
