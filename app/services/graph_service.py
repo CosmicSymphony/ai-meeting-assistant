@@ -94,6 +94,10 @@ async def accept_event(event_id: str) -> None:
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             json={"sendResponse": False, "comment": ""},
         )
+        if resp.status_code == 400:
+            # Shared mailboxes often auto-accept invites — ignore if already accepted
+            print(f"[Graph] accept_event 400 (likely already accepted) — continuing")
+            return
         resp.raise_for_status()
 
 
