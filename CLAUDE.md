@@ -27,7 +27,7 @@ Local: `app/.env`. Production: Railway Variables tab.
 - `ASSEMBLYAI_API_KEY` — AssemblyAI transcription
 - `OPENAI_API_KEY` — OpenAI gpt-4o
 - `RECALLAI_API_KEY` — Recall.ai (Asia Pacific region: `ap-northeast-1`)
-- `DATABASE_URL` — blank = SQLite locally; auto-set by Railway PostgreSQL plugin
+- `DATABASE_URL` — blank = SQLite locally; must be set to PostgreSQL URL on Railway (reference the Postgres plugin)
 - `WEBHOOK_BASE_URL` — blank locally; `https://ai-meeting-assistant-production-3552.up.railway.app` on Railway
 - `AZURE_TENANT_ID` — Azure AD tenant ID
 - `AZURE_CLIENT_ID` — Azure AD app registration client ID (`b0869b95-93d9-45bd-8dc4-1d2d9f25ec09`)
@@ -47,28 +47,40 @@ Local: `app/.env`. Production: Railway Variables tab.
 
 **Database migrations:** Alembic for PostgreSQL; SQLite schema changes go in the `_migrate()` function in `app/database.py`. New tables are auto-created by `Base.metadata.create_all()`.
 
-**FastAPI lifespan:** `app/main.py` uses `@asynccontextmanager async def lifespan()` for startup/shutdown. Startup: init DB, start APScheduler, reschedule pending meetings, set up Graph subscription (delayed 15s so server is ready).
+**FastAPI lifespan:** `app/main.py` uses `@asynccontextmanager async def lifespan()` for startup/shutdown. Startup: init DB, start APScheduler, reschedule pending meetings, start polling job, set up Graph subscription (delayed 15s so server is ready).
 
-## Calendar Auto-Join Flow (working as of 2026-03-18)
+## Calendar Auto-Join Flow (working as of 2026-03-19)
 1. User invites `meetingbot@jpuniversal.com.sg` to a Teams meeting
 2. Microsoft Graph sends notification to `/calendar/webhook`
-3. App fetches event details, accepts invite (once only — race condition guarded by DB unique constraint on `graph_event_id`)
-4. `ScheduledMeeting` record created, APScheduler job scheduled at `start_time - 1 minute`
-5. At scheduled time: `create_bot()` fires → `BotSession` created → existing Recall.ai flow handles recording + summary
+3. App checks DB first — if meeting already `completed/failed/cancelled`, exits immediately (no Graph API call)
+4. If new: fetches event, accepts invite (once only — `is_new` guard), creates `ScheduledMeeting`, schedules APScheduler job at `start_time - 1 minute`
+5. If existing + unchanged: exits silently (no update, no reschedule — prevents log spam from repeated Graph notifications)
+6. At scheduled time: `create_bot()` fires → `BotSession` created → Recall.ai flow handles recording + summary
 
 **Key notes:**
-- Graph subscription is set up 15s after startup (avoids 502 during validation handshake)
+- Graph subscription set up 15s after startup (avoids 502 during validation handshake)
 - On redeploy: lists existing subscriptions, reuses matching one or deletes stale ones before creating new
-- Graph fires multiple notifications per event — duplicate guard: insert DB record first, only accept if insert succeeds
-- Shared mailbox (`meetingbot@`) cannot use `AutomateProcessing AutoAccept` (Exchange limitation — only resource mailboxes support this). "Didn't respond" in Teams UI is cosmetic only — bot still joins.
+- Graph fires many notifications per event — duplicate guard: DB check first, then `is_new` flag, accept only once
+- Shared mailbox (`meetingbot@`) cannot use `AutomateProcessing AutoAccept` (Exchange limitation). "Didn't respond" in Teams UI is cosmetic — bot still joins.
 - `ScheduledMeeting.status`: `scheduled` → `completed` (bot dispatched) or `failed` or `cancelled`
 
 ## Manual Bot Flow (end-to-end, working)
 1. User pastes Teams meeting URL → app calls Recall.ai to send bot
 2. Bot joins meeting, waits in waiting room (user must admit it), records
-3. When call ends, `session.status = "processing"` set immediately, background task fires
+3. When call ends → webhook fires OR polling fallback catches it within 1 minute
 4. Background task: fetch Recall.ai transcript (usually empty) → fallback: download S3 video → upload bytes to AssemblyAI → poll until complete → OpenAI summary → save Meeting → `session.status = "done"`
 5. Bot status page auto-refreshes every 5s until done or failed
+
+## Polling Fallback (critical — Recall.ai webhooks are unreliable)
+`app/services/bot_processing_service.py` contains the shared bot processing logic.
+- APScheduler runs `_poll_pending_bots_job` every **1 minute**
+- Queries all `BotSession` records not in (`done`, `failed`, `processing`) with no `meeting_id`, created within last 24h
+- Calls Recall.ai API for each — if status is `done`/`call_ended`, triggers `process_bot_session()`
+- This is the primary reliability mechanism — do not remove it
+- `everyone_left_timeout` is set to **120 seconds** on bot creation so bot exits 2 minutes after last participant leaves
+
+## Webhook Race Condition Fix (2026-03-19)
+In `routes/recall.py` webhook handler, `should_process` must be evaluated BEFORE updating `session.status`. The old code set `session.status = "done"` first, then the check excluded `"done"` — so background processing never ran.
 
 ## AssemblyAI Critical Notes
 - Use `speech_models: ["universal-2"]` (plural, list) — `speech_model` (singular) is deprecated and causes 400
@@ -82,17 +94,31 @@ Local: `app/.env`. Production: Railway Variables tab.
 - `transcription_options` not allowed on this account tier — omit from bot creation
 - Transcript endpoint: `GET /transcript/?bot_id=` (paginated, returns `{results: [...]}`)
 - Recording URL in: `bot.recordings[].media_shortcuts.video_mixed.data.download_url`
+- `everyone_left_timeout: 120` — bot exits 2 minutes after last participant leaves
+- Recall.ai webhook delivery is unreliable — always rely on the polling fallback, not just the webhook
+
+## Prompt Injection Hardening (2026-03-19)
+All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<question>`, `<meeting_data>`, `<signature>`).
+- System message explicitly instructs model to treat tagged content as data only, never as instructions
+- `tone` and `audience` in email generation are allowlisted (`_ALLOWED_TONES`, `_ALLOWED_AUDIENCES`)
+- User questions capped at 500 chars, signatures at 200 chars
+
+## Timezone
+- Meeting timestamps stored in **SGT (Asia/Singapore, UTC+8)** using `ZoneInfo("Asia/Singapore")`
+- Railway servers run in UTC — always use explicit timezone, never `datetime.now()` without tz
 
 ## Background Processing Pattern
 - `session.status` guard: only trigger background task if status not in `("processing", "done", "failed")`
-- Check recall_status BEFORE overwriting session.status (race condition — fixed)
-- Background task opens its own `SessionLocal()` DB session
+- Evaluate `should_process` BEFORE updating `session.status` (race condition — fixed 2026-03-19)
+- All background tasks open their own `SessionLocal()` DB session
+- Extract ORM attribute values (bot_id, org_id) into local variables BEFORE closing the DB session to avoid `DetachedInstanceError`
 
 ## Key Files
 - `app/routes/recall.py` — bot join, status page, webhook, background processing
 - `app/routes/web.py` — dashboard, upload, transcription, Q&A, email generation
 - `app/routes/calendar.py` — Graph webhook, subscription setup, notification handler
-- `app/scheduler.py` — APScheduler setup, bot deployment jobs, startup rescheduling
+- `app/scheduler.py` — APScheduler setup, bot deployment jobs, polling fallback, startup rescheduling
+- `app/services/bot_processing_service.py` — shared bot processing logic (transcript → AssemblyAI → OpenAI → save)
 - `app/services/graph_service.py` — Microsoft Graph API: token, subscribe, get/accept event, extract join URL
 - `app/services/recall_service.py` — Recall.ai API calls, transcript formatting, status labels
 - `app/services/transcription_service.py` — AssemblyAI upload + poll
@@ -114,7 +140,7 @@ Local: `app/.env`. Production: Railway Variables tab.
 ## Models
 - `Organisation` — tenant with `api_key`
 - `Meeting` — transcript, summary, participants, key_decisions, action_items, `org_id`, `source`
-- `BotSession` — bot_id, status, meeting_id (FK set when processed), org_id
+- `BotSession` — bot_id, status, meeting_id (FK set when processed), org_id, created_at
 - `ScheduledMeeting` — graph_event_id (unique), subject, start_time (naive UTC), join_url, organizer_email, status, bot_session_id (FK), org_id
 
 ## UI Notes
