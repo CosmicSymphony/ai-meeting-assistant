@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI, UploadFile, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from app.routes.web import router as web_router
@@ -71,9 +72,17 @@ async def lifespan(app: FastAPI):
         _db.close()
 
     # Start APScheduler and reschedule any pending meetings
-    from app.scheduler import scheduler, reschedule_pending_on_startup
+    from app.scheduler import scheduler, reschedule_pending_on_startup, _poll_pending_bots_job
     scheduler.start()
     reschedule_pending_on_startup()
+
+    # Polling fallback: catch any bot sessions that missed the Recall.ai webhook
+    scheduler.add_job(
+        _poll_pending_bots_job,
+        trigger=IntervalTrigger(minutes=2),
+        id="poll_pending_bots",
+        replace_existing=True,
+    )
 
     # Schedule Graph subscription creation 15s after startup so the server is ready to validate
     if settings.WEBHOOK_BASE_URL and settings.AZURE_CLIENT_ID:

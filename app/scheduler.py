@@ -117,6 +117,55 @@ def schedule_bot_deployment(scheduled_meeting_id: int, org_id: int, join_url: st
     return job_id
 
 
+_POLL_DONE_STATUSES = {"done", "call_ended"}
+
+
+async def _poll_pending_bots_job() -> None:
+    """Every 2 minutes: check for bot sessions that completed but missed the webhook."""
+    from app.database import SessionLocal
+    from app.models import BotSession
+    from app.services.recall_service import get_bot
+    from app.services.bot_processing_service import process_bot_session
+    from datetime import timedelta
+
+    db = SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        pending = (
+            db.query(BotSession)
+            .filter(
+                BotSession.status.notin_(["done", "failed", "processing"]),
+                BotSession.meeting_id.is_(None),
+                BotSession.created_at > cutoff.replace(tzinfo=None),
+            )
+            .all()
+        )
+        if not pending:
+            return
+
+        print(f"[Poller] Checking {len(pending)} pending bot session(s)...")
+        for session in pending:
+            try:
+                bot_data = await get_bot(session.bot_id)
+                status_changes = bot_data.get("status_changes", [])
+                recall_status = (
+                    status_changes[-1].get("code", "unknown")
+                    if status_changes
+                    else bot_data.get("status", "unknown")
+                )
+                if recall_status in _POLL_DONE_STATUSES:
+                    print(f"[Poller] Bot {session.bot_id} is done — triggering processing")
+                    session.status = "processing"
+                    db.commit()
+                    db.close()
+                    db = SessionLocal()
+                    await process_bot_session(session.bot_id, session.org_id)
+            except Exception as e:
+                print(f"[Poller] Error checking bot {session.bot_id}: {e}")
+    finally:
+        db.close()
+
+
 def reschedule_pending_on_startup() -> None:
     """Re-create APScheduler jobs for pending meetings after an app restart."""
     from app.database import SessionLocal
