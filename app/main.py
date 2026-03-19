@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     # Polling fallback: catch any bot sessions that missed the Recall.ai webhook
     scheduler.add_job(
         _poll_pending_bots_job,
-        trigger=IntervalTrigger(minutes=2),
+        trigger=IntervalTrigger(minutes=1),
         id="poll_pending_bots",
         replace_existing=True,
     )
