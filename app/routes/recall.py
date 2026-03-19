@@ -155,16 +155,19 @@ async def recall_webhook(request: Request, background_tasks: BackgroundTasks):
         if not session:
             return {"ok": True}
 
-        if status_code and session.status not in ("processing", "failed"):
-            session.status = status_code
-            db.commit()
+        should_process = (
+            status_code in _DONE_STATUSES
+            and session.meeting_id is None
+            and session.status not in ("processing", "done", "failed")
+        )
 
-        if (status_code in _DONE_STATUSES
-                and session.meeting_id is None
-                and session.status not in ("processing", "done", "failed")):
+        if should_process:
             session.status = "processing"
             db.commit()
             background_tasks.add_task(_process_bot_background, bot_id, session.org_id)
+        elif status_code and session.status not in ("processing", "done", "failed"):
+            session.status = status_code
+            db.commit()
 
     finally:
         db.close()

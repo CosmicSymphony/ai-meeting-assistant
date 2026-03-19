@@ -86,6 +86,15 @@ async def setup_subscription():
 
 async def _handle_calendar_notification(event_id: str) -> None:
     """Process a Graph calendar change: accept invite, store ScheduledMeeting, schedule bot."""
+    # Check DB first — skip Graph API call if the meeting is already done
+    db = SessionLocal()
+    try:
+        early = db.query(ScheduledMeeting).filter_by(graph_event_id=event_id).first()
+        if early and early.status in ("completed", "failed", "cancelled"):
+            return
+    finally:
+        db.close()
+
     print(f"[Calendar] Processing event {event_id}")
     try:
         event = await get_event(event_id)
@@ -110,7 +119,6 @@ async def _handle_calendar_notification(event_id: str) -> None:
             existing = db.query(ScheduledMeeting).filter_by(graph_event_id=event_id).first()
             if existing:
                 if existing.status in ("completed", "failed"):
-                    print(f"[Calendar] Ignoring update for already-{existing.status} meeting id={existing.id}")
                     return
                 existing.subject = subject
                 existing.start_time = start_dt
