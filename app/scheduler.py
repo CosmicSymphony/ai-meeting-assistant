@@ -145,8 +145,10 @@ async def _poll_pending_bots_job() -> None:
 
         print(f"[Poller] Checking {len(pending)} pending bot session(s)...")
         for session in pending:
+            bot_id = session.bot_id
+            org_id = session.org_id
             try:
-                bot_data = await get_bot(session.bot_id)
+                bot_data = await get_bot(bot_id)
                 status_changes = bot_data.get("status_changes", [])
                 recall_status = (
                     status_changes[-1].get("code", "unknown")
@@ -154,14 +156,14 @@ async def _poll_pending_bots_job() -> None:
                     else bot_data.get("status", "unknown")
                 )
                 if recall_status in _POLL_DONE_STATUSES:
-                    print(f"[Poller] Bot {session.bot_id} is done — triggering processing")
+                    print(f"[Poller] Bot {bot_id} is done — triggering processing")
                     session.status = "processing"
                     db.commit()
                     db.close()
                     db = SessionLocal()
-                    await process_bot_session(session.bot_id, session.org_id)
+                    await process_bot_session(bot_id, org_id)
             except Exception as e:
-                print(f"[Poller] Error checking bot {session.bot_id}: {e}")
+                print(f"[Poller] Error checking bot {bot_id}: {e}")
     finally:
         db.close()
 
