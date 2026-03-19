@@ -18,6 +18,9 @@ async def create_bot(meeting_url: str, bot_name: str = "AI Meeting Assistant", w
     payload = {
         "meeting_url": meeting_url,
         "bot_name": bot_name,
+        "automatic_leave": {
+            "everyone_left_timeout": 120,  # leave 2 mins after last participant exits
+        },
     }
     if webhook_url:
         payload["webhook_url"] = webhook_url
