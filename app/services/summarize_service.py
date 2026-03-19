@@ -157,8 +157,9 @@ async def summarize_meeting(transcript_text: str, org_id: int):
     elif not summary_data.get("participants"):
         summary_data["participants"] = []
 
-    # Date should not be invented by AI
-    now = datetime.now()
+    # Date should not be invented by AI — use SGT (UTC+8) since server runs in UTC
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Singapore"))
     if detected_date:
         summary_data["meeting_date"] = detected_date
     else:
