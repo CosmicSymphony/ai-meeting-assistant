@@ -152,6 +152,27 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - Summary bullet points split on `•` character and rendered as `<ul>` in both `index.html` and `meeting_detail.html`
 
 ## Planned Next
+
+### In-Meeting Chat Message + Opt-Out Feature (next to build)
+Read.ai-style: when bot enters `in_call_recording` state, send a Teams chat message:
+> "AI Meeting Assistant has joined and is recording. To opt out: <a href="{WEBHOOK_BASE_URL}/optout/{bot_id}">Opt Out</a>"
+
+**Files to modify:**
+- `app/services/recall_service.py` — add `send_chat_message(bot_id, message)` and `stop_bot(bot_id)`
+- `app/routes/recall.py` — trigger chat message when webhook status = `in_call_recording`
+- `app/models.py` — add `chat_notified` bool column to `BotSession` (prevent duplicate messages)
+- `app/database.py` — add `chat_notified` to `_migrate()`
+- `app/templates/optout.html` — simple opt-out page with Stop Recording button
+- Register `GET/POST /optout/{bot_id}` route (public, no auth)
+
+**Recall.ai chat endpoint:** `POST https://ap-northeast-1.recall.ai/api/v1/bot/{bot_id}/send_chat_message/`
+Teams supports HTML anchor tags only. No tier restrictions.
+
+**Decisions needed before building:**
+- Privacy policy URL (to include in the chat message)
+- Should opt-out delete the saved recording from DB, or just stop the bot?
+
+### Other roadmap items
 - Upgrade AssemblyAI to `universal-3-pro` for better accuracy
 - Zoom and Google Meet support via Recall.ai
 - Convert `meetingbot@` shared mailbox to a resource mailbox for proper auto-accept in Teams UI
