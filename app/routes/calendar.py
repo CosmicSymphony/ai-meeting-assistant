@@ -120,12 +120,20 @@ async def _handle_calendar_notification(event_id: str) -> None:
             if existing:
                 if existing.status in ("completed", "failed"):
                     return
+                # Only update if something actually changed — avoids noise from repeated Graph notifications
+                changed = (
+                    existing.subject != subject
+                    or existing.start_time != start_dt
+                    or existing.join_url != join_url
+                )
+                if not changed:
+                    return
                 existing.subject = subject
                 existing.start_time = start_dt
                 existing.join_url = join_url
                 db.commit()
                 sched_id = existing.id
-                print(f"[Calendar] Updated ScheduledMeeting id={sched_id}")
+                print(f"[Calendar] Updated ScheduledMeeting id={sched_id} (time or URL changed)")
             else:
                 sched = ScheduledMeeting(
                     org_id=org_id,
