@@ -64,7 +64,7 @@ async def create_calendar_subscription(notification_url: str) -> dict:
         "notificationUrl": notification_url,
         "resource": f"/users/{settings.BOT_EMAIL}/events",
         "expirationDateTime": expiry,
-        "clientState": settings.AZURE_CLIENT_SECRET[:16],
+        "clientState": settings.AZURE_CLIENT_SECRET,
     }
     token = _get_access_token()
     async with httpx.AsyncClient(timeout=30, verify=False) as client:

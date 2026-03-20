@@ -71,7 +71,10 @@ async def join_meeting(
 @router.get("/bot/{bot_id}/debug")
 async def bot_debug(bot_id: str):
     """Return raw Recall.ai bot data for debugging."""
-    bot_data = await get_bot(bot_id)
+    try:
+        bot_data = await get_bot(bot_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Bot not found")
     return bot_data
 
 

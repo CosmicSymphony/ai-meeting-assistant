@@ -133,8 +133,8 @@ async def generate_followup_email_endpoint(
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @app.post("/generate_followup_email_latest", response_model=GenerateFollowupEmailResponse)
@@ -154,8 +154,8 @@ async def generate_followup_email_latest_endpoint(
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @app.post("/summarize")
