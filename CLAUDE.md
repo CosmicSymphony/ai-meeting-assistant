@@ -12,6 +12,9 @@ FastAPI web app that transcribes, summarises, and queries meeting recordings.
 - **Python:** 3.14 at `C:\Users\itchjc\AppData\Local\Python\bin\python.exe`
 - **No virtual environment** — packages installed globally
 
+## Tests
+There are no automated tests in this project.
+
 ## Tech Stack
 - **Backend:** FastAPI + SQLAlchemy ORM (SQLite locally, PostgreSQL via `DATABASE_URL` env var)
 - **Transcription:** AssemblyAI REST API (`/v2/` endpoints)
@@ -114,6 +117,9 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - Extract ORM attribute values (bot_id, org_id) into local variables BEFORE closing the DB session to avoid `DetachedInstanceError`
 
 ## Key Files
+- `app/main.py` — FastAPI app entry point; lifespan (DB init, scheduler start, Graph subscription), top-level routes
+- `app/config.py` — `Settings` class (loads `.env` via `python-dotenv`); import with `from app.config import settings`
+- `app/dependencies.py` — FastAPI dependency injection (DB session, org resolution from `X-API-Key`)
 - `app/routes/recall.py` — bot join, status page, webhook, background processing
 - `app/routes/web.py` — dashboard, upload, transcription, Q&A, email generation
 - `app/routes/calendar.py` — Graph webhook, subscription setup, notification handler
@@ -124,10 +130,12 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - `app/services/transcription_service.py` — AssemblyAI upload + poll
 - `app/services/summarize_service.py` — OpenAI summarisation
 - `app/services/ask_meetings_service.py` — multi-meeting Q&A with date/person/keyword search
+- `app/schemas/email_schemas.py` — Pydantic request/response models for email generation endpoints
 - `app/templates/bot_status.html` — bot status page (auto-refresh, spinner states)
 - `app/templates/meeting_detail.html` — meeting summary + transcript view
 
 ## Routes
+Routes in `app/routes/`:
 - `/web/` — dashboard
 - `/web/meeting/{filename}` — meeting detail
 - `/recall/join-meeting` — POST to send bot
@@ -136,6 +144,12 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - `/recall/webhook` — Recall.ai webhook receiver
 - `/calendar/webhook` — Microsoft Graph calendar notification receiver
 - `/calendar/subscribe` — POST to manually create/refresh Graph subscription
+
+Routes defined directly in `app/main.py`:
+- `POST /generate_followup_email` — generate follow-up email from a specific meeting
+- `POST /generate_followup_email_latest` — generate from the most recent meeting
+- `POST /summarize` — summarize an uploaded transcript file
+- `POST /ask_meetings` — multi-meeting natural-language Q&A
 
 ## Models
 - `Organisation` — tenant with `api_key`
