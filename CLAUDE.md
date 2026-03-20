@@ -16,7 +16,7 @@ FastAPI web app that transcribes, summarises, and queries meeting recordings.
 There are no automated tests in this project.
 
 ## Tech Stack
-- **Backend:** FastAPI + SQLAlchemy ORM (SQLite locally, PostgreSQL via `DATABASE_URL` env var)
+- **Backend:** FastAPI + SQLAlchemy ORM (SQLite locally, PostgreSQL via `DATABASE_URL` env var; PostgreSQL uses connection pool: `pool_size=10`, `max_overflow=5`, `pool_pre_ping=True`)
 - **Transcription:** AssemblyAI REST API (`/v2/` endpoints)
 - **LLM:** OpenAI gpt-4o via `app/llm/openai_provider.py` (abstracted behind `BaseProvider`)
 - **Meeting bot:** Recall.ai (Teams integration working end-to-end)
@@ -24,6 +24,7 @@ There are no automated tests in this project.
 - **Scheduler:** APScheduler `AsyncIOScheduler` — deploys bot 1 min before meeting start
 - **Templates:** Jinja2, static CSS at `app/static/style.css`
 - **Deployment:** Railway (PostgreSQL + auto-deploy from GitHub)
+- **python-docx** (`python-docx==1.2.0`) — for parsing Teams `.docx` transcript uploads
 
 ## Environment Variables
 Local: `app/.env`. Production: Railway Variables tab.
@@ -42,8 +43,8 @@ Local: `app/.env`. Production: Railway Variables tab.
 ## Architecture
 **Service-Repository-Model pattern:**
 - `app/models.py` — SQLAlchemy ORM models
-- `app/repositories/` — data access with 30s in-memory cache per org
-- `app/services/` — business logic and external API calls
+- `app/repositories/` — data access with 30s in-memory cache per org; `slugify()` lives in `meeting_repository.py`
+- `app/services/` — business logic and external API calls; `DONE_STATUSES` shared constant lives in `bot_processing_service.py`; `graph_service.py` uses `_client()` helper for consistent httpx client config
 - `app/routes/` — FastAPI endpoints delegating to services
 
 **Multi-tenancy:** Every `Meeting`, `BotSession`, and `ScheduledMeeting` is scoped to an `Organisation` by `org_id`. A default org is auto-created at startup. Web UI uses the default org; REST API uses `X-API-Key` header.
@@ -91,8 +92,9 @@ In `routes/recall.py` webhook handler, `should_process` must be evaluated BEFORE
 - Use `speech_models: ["universal-2"]` (plural, list) — `speech_model` (singular) is deprecated and causes 400
 - `"best"` is NOT a valid value — use `"universal-2"` or `"universal-3-pro"`
 - Must download S3 pre-signed URL first (via httpx), then upload bytes — passing URL directly causes 400
-- All httpx clients use `verify=False` (corporate SSL proxy)
+- `SSL_VERIFY` env var controls outbound SSL verification for AssemblyAI calls — always `true` in production
 - Meetings with no speech or music-only audio are marked failed with a user-friendly message
+- AssemblyAI status is polled every **1 second** (not 3s)
 
 ## Recall.ai Notes
 - Base URL: `https://ap-northeast-1.recall.ai/api/v1`
@@ -114,7 +116,7 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - Security headers middleware in `main.py`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
 - `Strict-Transport-Security` added automatically when `WEBHOOK_BASE_URL` is set (production only)
 - `meeting_url` validated before sending to Recall.ai — only `https://` URLs from `teams.microsoft.com`, `zoom.us`, `meet.google.com` are allowed
-- File uploads validated by extension: audio endpoints accept `.mp3/.mp4/.m4a/.wav/.webm/.ogg/.flac/.aac`; transcript endpoint accepts `.txt/.text` only
+- File uploads validated by extension: audio endpoints accept `.mp3/.mp4/.m4a/.wav/.webm/.ogg/.flac/.aac`; transcript endpoint accepts `.txt/.text/.vtt/.docx` (`.vtt` strips timestamps; `.docx` uses python-docx)
 - `/recall/bot/{id}/debug` requires `X-API-Key` header
 - Recall.ai and calendar webhooks handle malformed JSON gracefully (no 500)
 - `CALENDAR_WEBHOOK_SECRET` used as Graph clientState (separate from Azure auth credentials)
@@ -185,7 +187,15 @@ Routes defined directly in `app/main.py`:
 
 ## Planned Next
 
-### In-Meeting Chat Message + Opt-Out Feature (next to build)
+### #1 Priority: Microsoft SSO Authentication
+The web UI currently has no authentication — all routes use the default org. For SaaS progression, add Microsoft SSO login first:
+- Use MSAL + Azure AD to authenticate users (same app registration already configured)
+- Gate all `/web/` routes behind login; store session in signed cookie or JWT
+- Map authenticated user to their `Organisation` record (enables true multi-tenancy)
+- Add a per-org onboarding flow (invite bot email, set webhook secret)
+- After auth is in place: add Stripe billing and rate limiting on cost-intensive endpoints (`/transcribe-audio`, `/summarize`, `/ask_meetings`)
+
+### In-Meeting Chat Message + Opt-Out Feature
 Read.ai-style: when bot enters `in_call_recording` state, send a Teams chat message:
 > "AI Meeting Assistant has joined and is recording. To opt out: <a href="{WEBHOOK_BASE_URL}/optout/{bot_id}">Opt Out</a>"
 
@@ -208,5 +218,4 @@ Teams supports HTML anchor tags only. No tier restrictions.
 - Upgrade AssemblyAI to `universal-3-pro` for better accuracy
 - Zoom and Google Meet support via Recall.ai
 - Convert `meetingbot@` shared mailbox to a resource mailbox for proper auto-accept in Teams UI
-- SSO / enterprise auth
 - Multi-tenant SaaS: OAuth consent flow per customer, per-org Azure credentials
