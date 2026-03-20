@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from app.config import settings
 from app.database import SessionLocal
-from app.dependencies import get_web_org_id
+from app.dependencies import get_web_org_id, get_current_org_api
 from app.models import BotSession, Meeting
 
 from app.services.recall_service import (
@@ -86,8 +86,8 @@ async def join_meeting(
 # ── Raw debug endpoint ─────────────────────────────────────────────────────────
 
 @router.get("/bot/{bot_id}/debug")
-async def bot_debug(bot_id: str):
-    """Return raw Recall.ai bot data for debugging."""
+async def bot_debug(bot_id: str, _org=Depends(get_current_org_api)):
+    """Return raw Recall.ai bot data for debugging. Requires X-API-Key header."""
     try:
         bot_data = await get_bot(bot_id)
     except Exception:

@@ -19,6 +19,25 @@ templates = Jinja2Templates(directory="app/templates")
 
 MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25 MB
 
+_ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".mp4", ".m4a", ".wav", ".webm", ".ogg", ".flac", ".aac"}
+_ALLOWED_TRANSCRIPT_EXTENSIONS = {".txt", ".text"}
+
+
+def _check_audio_file(filename: str) -> str | None:
+    """Returns an error message if the file extension is not allowed, else None."""
+    ext = Path(filename or "").suffix.lower()
+    if ext not in _ALLOWED_AUDIO_EXTENSIONS:
+        return f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(_ALLOWED_AUDIO_EXTENSIONS))}"
+    return None
+
+
+def _check_transcript_file(filename: str) -> str | None:
+    """Returns an error message if the transcript file extension is not allowed, else None."""
+    ext = Path(filename or "").suffix.lower()
+    if ext not in _ALLOWED_TRANSCRIPT_EXTENSIONS:
+        return f"Unsupported file type '{ext}'. Please upload a plain text (.txt) transcript."
+    return None
+
 
 def render_page(
     request: Request,
@@ -66,6 +85,8 @@ def home(request: Request, org_id: int = Depends(get_web_org_id)):
 @router.post("/summarize", response_class=HTMLResponse)
 async def summarize_transcript(request: Request, file: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
+        if err := _check_transcript_file(file.filename):
+            return render_page(request, org_id, summarize_error=err, scroll_to="card-summarize")
         content = await file.read()
         transcript_text = content.decode("utf-8")
         result = await summarize_meeting(transcript_text, org_id)
@@ -77,6 +98,8 @@ async def summarize_transcript(request: Request, file: UploadFile = File(...), o
 @router.post("/transcribe-audio", response_class=HTMLResponse)
 async def transcribe_audio_file(request: Request, file: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
+        if err := _check_audio_file(file.filename):
+            return render_page(request, org_id, audio_error=err, scroll_to="card-audio")
         content = await file.read()
 
         if len(content) > MAX_AUDIO_SIZE:
@@ -94,6 +117,8 @@ async def transcribe_audio_file(request: Request, file: UploadFile = File(...), 
 @router.post("/transcribe-only", response_class=HTMLResponse)
 async def transcribe_only(request: Request, file: UploadFile = File(...), org_id: int = Depends(get_web_org_id)):
     try:
+        if err := _check_audio_file(file.filename):
+            return render_page(request, org_id, audio_error=err, scroll_to="card-audio")
         content = await file.read()
 
         if len(content) > MAX_AUDIO_SIZE:

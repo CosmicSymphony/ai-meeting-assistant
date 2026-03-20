@@ -9,8 +9,7 @@ _HEADERS = {
 
 
 def _client() -> httpx.AsyncClient:
-    """HTTP client with SSL verification disabled for corporate proxy compatibility."""
-    return httpx.AsyncClient(timeout=30, verify=False)
+    return httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY)
 
 
 async def create_bot(meeting_url: str, bot_name: str = "AI Meeting Assistant", webhook_url: str = None) -> dict:

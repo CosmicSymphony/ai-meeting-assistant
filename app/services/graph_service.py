@@ -35,7 +35,7 @@ def _get_access_token() -> str:
 async def list_subscriptions() -> list:
     """List all active Graph subscriptions for this app."""
     token = _get_access_token()
-    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+    async with httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY) as client:
         resp = await client.get(
             f"{_GRAPH_BASE}/subscriptions",
             headers={"Authorization": f"Bearer {token}"},
@@ -47,7 +47,7 @@ async def list_subscriptions() -> list:
 async def delete_subscription(subscription_id: str) -> None:
     """Delete a Graph subscription."""
     token = _get_access_token()
-    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+    async with httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY) as client:
         await client.delete(
             f"{_GRAPH_BASE}/subscriptions/{subscription_id}",
             headers={"Authorization": f"Bearer {token}"},
@@ -64,10 +64,10 @@ async def create_calendar_subscription(notification_url: str) -> dict:
         "notificationUrl": notification_url,
         "resource": f"/users/{settings.BOT_EMAIL}/events",
         "expirationDateTime": expiry,
-        "clientState": settings.AZURE_CLIENT_SECRET,
+        "clientState": settings.CALENDAR_WEBHOOK_SECRET,
     }
     token = _get_access_token()
-    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+    async with httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY) as client:
         resp = await client.post(
             f"{_GRAPH_BASE}/subscriptions",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -84,7 +84,7 @@ async def renew_calendar_subscription(subscription_id: str) -> dict:
     from datetime import datetime, timedelta, timezone
     expiry = (datetime.now(timezone.utc) + timedelta(minutes=4229)).strftime("%Y-%m-%dT%H:%M:%SZ")
     token = _get_access_token()
-    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+    async with httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY) as client:
         resp = await client.patch(
             f"{_GRAPH_BASE}/subscriptions/{subscription_id}",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -97,7 +97,7 @@ async def renew_calendar_subscription(subscription_id: str) -> dict:
 async def get_event(event_id: str) -> dict:
     """Fetch a calendar event by ID from the bot mailbox."""
     token = _get_access_token()
-    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+    async with httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY) as client:
         resp = await client.get(
             f"{_GRAPH_BASE}/users/{settings.BOT_EMAIL}/events/{event_id}",
             headers={"Authorization": f"Bearer {token}"},
@@ -110,7 +110,7 @@ async def get_event(event_id: str) -> dict:
 async def accept_event(event_id: str) -> None:
     """Send an accept response to a calendar invite (without sending a response email)."""
     token = _get_access_token()
-    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+    async with httpx.AsyncClient(timeout=30, verify=settings.SSL_VERIFY) as client:
         resp = await client.post(
             f"{_GRAPH_BASE}/users/{settings.BOT_EMAIL}/events/{event_id}/accept",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},

@@ -55,7 +55,7 @@ async def graph_webhook(
 
     for notification in payload.get("value", []):
         # Validate clientState to reject spoofed notifications
-        if notification.get("clientState") != settings.AZURE_CLIENT_SECRET:
+        if notification.get("clientState") != settings.CALENDAR_WEBHOOK_SECRET:
             print("[Calendar] Ignoring notification with invalid clientState")
             continue
 

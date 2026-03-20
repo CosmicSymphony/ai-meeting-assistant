@@ -8,7 +8,7 @@ _HEADERS = {"authorization": settings.ASSEMBLYAI_API_KEY}
 
 async def _run_transcription(audio_url: str = None, file_bytes: bytes = None, language: str = None) -> tuple[str, str]:
     """Shared AssemblyAI transcription logic. Accepts either a URL or raw bytes."""
-    async with httpx.AsyncClient(timeout=300, verify=False) as client:
+    async with httpx.AsyncClient(timeout=300, verify=settings.SSL_VERIFY) as client:
 
         # 1. Upload bytes if no URL provided
         if not audio_url:
@@ -84,7 +84,7 @@ async def transcribe_from_url(audio_url: str, language: str = None) -> tuple[str
     Returns (transcript_text_with_speaker_labels, detected_language).
     """
     print(f"[AssemblyAI] Downloading audio from URL...")
-    async with httpx.AsyncClient(timeout=300, verify=False) as client:
+    async with httpx.AsyncClient(timeout=300, verify=settings.SSL_VERIFY) as client:
         dl_resp = await client.get(audio_url)
         dl_resp.raise_for_status()
         file_bytes = dl_resp.content
