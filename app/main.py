@@ -111,6 +111,15 @@ async def add_security_headers(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Server"] = "server"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
     if settings.WEBHOOK_BASE_URL:  # only set HSTS when running in production (HTTPS)
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
