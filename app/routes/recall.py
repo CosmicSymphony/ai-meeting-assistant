@@ -1,6 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from urllib.parse import urlparse
 
 from app.config import settings
 from app.database import SessionLocal
@@ -30,6 +31,22 @@ async def join_meeting(
     org_id: int = Depends(get_web_org_id),
 ):
     try:
+        _ALLOWED_MEETING_DOMAINS = (
+            "teams.microsoft.com",
+            "zoom.us",
+            "meet.google.com",
+        )
+        parsed = urlparse(meeting_url)
+        if parsed.scheme != "https" or not any(
+            parsed.netloc == d or parsed.netloc.endswith("." + d)
+            for d in _ALLOWED_MEETING_DOMAINS
+        ):
+            return templates.TemplateResponse("bot_status.html", {
+                "request": request,
+                "error": "Invalid meeting URL. Please provide a Teams, Zoom, or Google Meet link.",
+                "bot": None,
+            })
+
         webhook_url = None
         if settings.WEBHOOK_BASE_URL:
             webhook_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/recall/webhook"
@@ -137,7 +154,10 @@ async def bot_status_page(
 
 @router.post("/webhook")
 async def recall_webhook(request: Request, background_tasks: BackgroundTasks):
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        return {"ok": True}
     event = payload.get("event", "")
     data = payload.get("data", {})
 
