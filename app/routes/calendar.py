@@ -3,6 +3,8 @@ Microsoft Graph calendar webhook routes.
 Handles subscription validation, incoming calendar notifications, and manual subscription setup.
 """
 
+import traceback
+
 from fastapi import APIRouter, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from datetime import datetime, timezone
@@ -11,8 +13,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from app.config import settings
 from app.database import SessionLocal
 from app.models import ScheduledMeeting
-from app.services.graph_service import get_event, accept_event, extract_join_url
-from app.scheduler import schedule_bot_deployment
+from app.repositories.organisation_repository import get_default_org_id
+from app.services.graph_service import (
+    create_calendar_subscription, get_event, accept_event, extract_join_url,
+)
+from app.scheduler import schedule_bot_deployment, set_subscription_id
 
 router = APIRouter()
 
@@ -69,9 +74,6 @@ async def graph_webhook(
 @router.post("/subscribe")
 async def setup_subscription():
     """Manually create or refresh the Graph calendar subscription. Call once after deployment."""
-    from app.services.graph_service import create_calendar_subscription
-    from app.scheduler import set_subscription_id
-
     if not settings.WEBHOOK_BASE_URL:
         return {"error": "WEBHOOK_BASE_URL is not set — cannot create subscription"}
     if not settings.AZURE_CLIENT_ID:
@@ -110,7 +112,6 @@ async def _handle_calendar_notification(event_id: str) -> None:
         start = event.get("start", {})
         start_dt = _parse_graph_datetime(start.get("dateTime", ""), start.get("timeZone", "UTC"))
 
-        from app.repositories.organisation_repository import get_default_org_id
         org_id = get_default_org_id()
 
         is_new = False
@@ -172,14 +173,13 @@ async def _handle_calendar_notification(event_id: str) -> None:
                                 start_dt.replace(tzinfo=timezone.utc))
 
     except Exception as e:
-        import traceback
         print(f"[Calendar] Error handling event {event_id}: {e}")
         traceback.print_exc()
 
 
 def _cancel_scheduled_meeting(event_id: str) -> None:
     """Mark a ScheduledMeeting as cancelled and remove its APScheduler job."""
-    from app.scheduler import scheduler
+    from app.scheduler import scheduler  # local import to avoid circular dependency
     db = SessionLocal()
     try:
         sched = db.query(ScheduledMeeting).filter_by(graph_event_id=event_id).first()

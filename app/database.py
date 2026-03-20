@@ -12,10 +12,13 @@ from app.config import settings
 DATABASE_URL = settings.DATABASE_URL
 
 # SQLite requires check_same_thread=False; PostgreSQL does not
-_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+_connect_args = {"check_same_thread": False} if _is_sqlite else {}
 
-# The engine is the actual connection to the database
-engine = create_engine(DATABASE_URL, connect_args=_connect_args)
+# PostgreSQL pool: pre-ping detects stale connections, pool_size/max_overflow handle concurrency
+_pool_kwargs = {} if _is_sqlite else {"pool_size": 10, "max_overflow": 5, "pool_pre_ping": True}
+
+engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_pool_kwargs)
 
 # A session is like a "workspace" — you open one, do your work, then close it
 SessionLocal = sessionmaker(bind=engine)

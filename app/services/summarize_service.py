@@ -1,6 +1,9 @@
 import json
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_SGT = ZoneInfo("Asia/Singapore")
 
 from app.llm.provider_factory import get_llm_provider
 from app.repositories.meeting_repository import save_meeting, slugify  # noqa: F401 (re-exported for callers)
@@ -147,8 +150,7 @@ async def summarize_meeting(transcript_text: str, org_id: int):
         summary_data["participants"] = []
 
     # Date should not be invented by AI — use SGT (UTC+8) since server runs in UTC
-    from zoneinfo import ZoneInfo
-    now = datetime.now(ZoneInfo("Asia/Singapore"))
+    now = datetime.now(_SGT)
     if detected_date:
         summary_data["meeting_date"] = detected_date
     else:

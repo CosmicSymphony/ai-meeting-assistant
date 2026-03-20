@@ -62,7 +62,7 @@ async def _run_transcription(audio_url: str = None, file_bytes: bytes = None, la
                     raise RuntimeError("Transcription failed: no spoken audio was detected in this file.")
                 raise RuntimeError(f"Transcription failed: {api_error}")
 
-            await asyncio.sleep(3)
+            await asyncio.sleep(1)
 
     # 4. Format with speaker labels if available
     utterances = data.get("utterances") or []

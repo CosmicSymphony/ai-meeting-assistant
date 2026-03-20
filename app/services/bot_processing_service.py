@@ -64,7 +64,7 @@ async def process_bot_session(bot_id: str, org_id: int) -> None:
         print(f"[Recall] Meeting processed successfully: {summary.get('_file')} (id={meeting_id})")
 
     except Exception as e:
-        import traceback
+        import traceback  # noqa: PLC0415 — kept local to avoid import at module level slowing startup
         print(f"[Recall] Processing EXCEPTION for bot {bot_id}: {e}")
         traceback.print_exc()
         try:

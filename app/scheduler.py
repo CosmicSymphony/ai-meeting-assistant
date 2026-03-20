@@ -3,10 +3,18 @@ APScheduler setup for timed bot deployment.
 Uses AsyncIOScheduler to integrate with FastAPI's asyncio event loop.
 """
 
+import traceback
 from datetime import datetime, timedelta, timezone
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+
+from app.database import SessionLocal
+from app.models import BotSession, ScheduledMeeting
+from app.services.recall_service import create_bot, get_bot
+from app.services.bot_processing_service import process_bot_session, DONE_STATUSES as _POLL_DONE_STATUSES
+from app.config import settings
 
 scheduler = AsyncIOScheduler(timezone="UTC")
 _subscription_id: str | None = None
@@ -38,11 +46,6 @@ async def _renew_subscription_job() -> None:
 
 async def _deploy_bot_job(scheduled_meeting_id: int, org_id: int, join_url: str, subject: str) -> None:
     """APScheduler job: deploy a Recall.ai bot for a scheduled meeting."""
-    from app.database import SessionLocal
-    from app.models import BotSession, ScheduledMeeting
-    from app.services.recall_service import create_bot
-    from app.config import settings
-
     print(f"[Scheduler] Deploying bot for ScheduledMeeting id={scheduled_meeting_id}")
     db = SessionLocal()
     sched = None
@@ -78,7 +81,6 @@ async def _deploy_bot_job(scheduled_meeting_id: int, org_id: int, join_url: str,
         db.commit()
         print(f"[Scheduler] Bot {bot_id} dispatched for ScheduledMeeting id={scheduled_meeting_id}")
     except Exception as e:
-        import traceback
         print(f"[Scheduler] Error deploying bot: {e}")
         traceback.print_exc()
         if sched:
@@ -121,16 +123,10 @@ from app.services.bot_processing_service import DONE_STATUSES as _POLL_DONE_STAT
 
 
 async def _poll_pending_bots_job() -> None:
-    """Every 2 minutes: check for bot sessions that completed but missed the webhook."""
-    from app.database import SessionLocal
-    from app.models import BotSession
-    from app.services.recall_service import get_bot
-    from app.services.bot_processing_service import process_bot_session
-    from datetime import timedelta
-
+    """Every 1 minute: check for bot sessions that completed but missed the webhook."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     db = SessionLocal()
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         pending = (
             db.query(BotSession)
             .filter(
@@ -143,36 +139,40 @@ async def _poll_pending_bots_job() -> None:
         if not pending:
             return
 
-        print(f"[Poller] Checking {len(pending)} pending bot session(s)...")
-        for session in pending:
-            bot_id = session.bot_id
-            org_id = session.org_id
-            try:
-                bot_data = await get_bot(bot_id)
-                status_changes = bot_data.get("status_changes", [])
-                recall_status = (
-                    status_changes[-1].get("code", "unknown")
-                    if status_changes
-                    else bot_data.get("status", "unknown")
-                )
-                if recall_status in _POLL_DONE_STATUSES:
-                    print(f"[Poller] Bot {bot_id} is done — triggering processing")
-                    session.status = "processing"
-                    db.commit()
-                    db.close()
-                    db = SessionLocal()
-                    await process_bot_session(bot_id, org_id)
-            except Exception as e:
-                print(f"[Poller] Error checking bot {bot_id}: {e}")
+        # Extract needed values before closing session
+        to_process = [(s.bot_id, s.org_id, s.id) for s in pending]
     finally:
         db.close()
+
+    print(f"[Poller] Checking {len(to_process)} pending bot session(s)...")
+    for bot_id, org_id, session_id in to_process:
+        try:
+            bot_data = await get_bot(bot_id)
+            status_changes = bot_data.get("status_changes", [])
+            recall_status = (
+                status_changes[-1].get("code", "unknown")
+                if status_changes
+                else bot_data.get("status", "unknown")
+            )
+            if recall_status in _POLL_DONE_STATUSES:
+                print(f"[Poller] Bot {bot_id} is done — triggering processing")
+                db = SessionLocal()
+                try:
+                    session = db.query(BotSession).filter_by(id=session_id).first()
+                    if session and session.status not in ("processing", "done", "failed"):
+                        session.status = "processing"
+                        db.commit()
+                    else:
+                        continue
+                finally:
+                    db.close()
+                await process_bot_session(bot_id, org_id)
+        except Exception as e:
+            print(f"[Poller] Error checking bot {bot_id}: {e}")
 
 
 def reschedule_pending_on_startup() -> None:
     """Re-create APScheduler jobs for pending meetings after an app restart."""
-    from app.database import SessionLocal
-    from app.models import ScheduledMeeting
-
     db = SessionLocal()
     try:
         now = datetime.now(timezone.utc)

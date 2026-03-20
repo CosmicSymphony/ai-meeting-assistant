@@ -82,6 +82,9 @@ def get_all_meetings(org_id: int) -> List[Dict[str, Any]]:
             .all()
         )
         result = [m.to_dict() for m in rows]
+        # Pre-build search text so searches don't rebuild it per-call
+        for m in result:
+            _build_search_text(m)
         _meetings_cache[org_id] = result
         _cache_timestamps[org_id] = now
         return result

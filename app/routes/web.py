@@ -1,7 +1,11 @@
+import io
+import re
+from datetime import datetime
 from pathlib import Path
 
+from docx import Document as DocxDocument
 from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.dependencies import get_web_org_id
@@ -11,6 +15,8 @@ from app.services.ask_single_meeting_service import ask_single_meeting_question
 from app.services.email_generation_service import generate_followup_email_latest, generate_followup_email
 from app.services.transcription_service import transcribe_audio
 from app.repositories.meeting_repository import get_recent_meetings, get_meeting_by_file, save_meeting, delete_meeting
+from app.database import SessionLocal
+from app.models import Meeting
 
 RECORDINGS_DIR = Path("recordings")
 
@@ -21,6 +27,7 @@ MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25 MB
 
 _ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".mp4", ".m4a", ".wav", ".webm", ".ogg", ".flac", ".aac"}
 _ALLOWED_TRANSCRIPT_EXTENSIONS = {".txt", ".text", ".vtt", ".docx"}
+_RE_VTT_CUE_NUMBER = re.compile(r"^\d+$")
 
 
 def _check_audio_file(filename: str) -> str | None:
@@ -49,19 +56,15 @@ def _extract_transcript_text(content: bytes, filename: str) -> str:
     ext = Path(filename or "").suffix.lower()
 
     if ext == ".docx":
-        import io
-        from docx import Document
-        doc = Document(io.BytesIO(content))
+        doc = DocxDocument(io.BytesIO(content))
         return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
     if ext == ".vtt":
-        import re
         text = content.decode("utf-8", errors="replace")
         lines = []
         for line in text.splitlines():
             line = line.strip()
-            # Skip header, cue timestamps (00:00:00.000 --> ...), and blank lines
-            if not line or line == "WEBVTT" or re.match(r"^\d+$", line) or "-->" in line:
+            if not line or line == "WEBVTT" or _RE_VTT_CUE_NUMBER.match(line) or "-->" in line:
                 continue
             lines.append(line)
         return "\n".join(lines)
@@ -211,7 +214,6 @@ async def record_meeting(request: Request, audio: UploadFile = File(...), org_id
 
         # Save audio file to recordings/ folder
         RECORDINGS_DIR.mkdir(exist_ok=True)
-        from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         audio_filename = f"recording_{timestamp}.webm"
         audio_path = RECORDINGS_DIR / audio_filename
@@ -221,18 +223,18 @@ async def record_meeting(request: Request, audio: UploadFile = File(...), org_id
         transcript_text, _ = await transcribe_audio(content, audio_filename)
         result = await summarize_meeting(transcript_text, org_id)
 
-        # Mark it as a browser recording in the DB
-        from app.database import SessionLocal
-        from app.models import Meeting
-        db = SessionLocal()
-        try:
-            meeting = db.query(Meeting).filter_by(filename=result.get("_file"), org_id=org_id).first()
-            if meeting:
-                meeting.source = "browser_recording"
-                meeting.audio_path = str(audio_path)
-                db.commit()
-        finally:
-            db.close()
+        # Mark it as a browser recording — use the id already returned by summarize_meeting
+        meeting_id = result.get("id")
+        if meeting_id:
+            db = SessionLocal()
+            try:
+                meeting = db.query(Meeting).filter_by(id=meeting_id).first()
+                if meeting:
+                    meeting.source = "browser_recording"
+                    meeting.audio_path = str(audio_path)
+                    db.commit()
+            finally:
+                db.close()
 
         return render_page(request, org_id, summary_result=result, scroll_to="card-summary-result")
     except Exception as e:
@@ -299,5 +301,4 @@ async def ask_about_single_meeting(
 @router.post("/meeting/{meeting_file}/delete", response_class=HTMLResponse)
 async def delete_meeting_route(request: Request, meeting_file: str, org_id: int = Depends(get_web_org_id)):
     delete_meeting(meeting_file, org_id)
-    from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/web/", status_code=303)
