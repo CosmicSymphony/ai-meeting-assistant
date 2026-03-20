@@ -36,6 +36,8 @@ Local: `app/.env`. Production: Railway Variables tab.
 - `AZURE_CLIENT_ID` — Azure AD app registration client ID (`b0869b95-93d9-45bd-8dc4-1d2d9f25ec09`)
 - `AZURE_CLIENT_SECRET` — Azure AD client secret
 - `BOT_EMAIL` — shared mailbox email (`meetingbot@jpuniversal.com.sg`)
+- `CALENDAR_WEBHOOK_SECRET` — dedicated secret for validating Graph calendar webhook notifications (set to a random string via `openssl rand -hex 32`; falls back to `AZURE_CLIENT_SECRET` if unset — add to Railway)
+- `SSL_VERIFY` — set to `false` in local `.env` only when behind a corporate SSL proxy; always `true` (default) in production
 
 ## Architecture
 **Service-Repository-Model pattern:**
@@ -100,11 +102,27 @@ In `routes/recall.py` webhook handler, `should_process` must be evaluated BEFORE
 - `everyone_left_timeout: 120` — bot exits 2 minutes after last participant leaves
 - Recall.ai webhook delivery is unreliable — always rely on the polling fallback, not just the webhook
 
-## Prompt Injection Hardening (2026-03-19)
+## Security Hardening
+
+### Prompt Injection (2026-03-19)
 All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<question>`, `<meeting_data>`, `<signature>`).
 - System message explicitly instructs model to treat tagged content as data only, never as instructions
 - `tone` and `audience` in email generation are allowlisted (`_ALLOWED_TONES`, `_ALLOWED_AUDIENCES`)
 - User questions capped at 500 chars, signatures at 200 chars
+
+### HTTP Security (2026-03-20)
+- Security headers middleware in `main.py`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
+- `Strict-Transport-Security` added automatically when `WEBHOOK_BASE_URL` is set (production only)
+- `meeting_url` validated before sending to Recall.ai — only `https://` URLs from `teams.microsoft.com`, `zoom.us`, `meet.google.com` are allowed
+- File uploads validated by extension: audio endpoints accept `.mp3/.mp4/.m4a/.wav/.webm/.ogg/.flac/.aac`; transcript endpoint accepts `.txt/.text` only
+- `/recall/bot/{id}/debug` requires `X-API-Key` header
+- Recall.ai and calendar webhooks handle malformed JSON gracefully (no 500)
+- `CALENDAR_WEBHOOK_SECRET` used as Graph clientState (separate from Azure auth credentials)
+- `SSL_VERIFY` env var controls outbound SSL verification — always `true` in production
+
+### Known gaps (planned)
+- Web UI has no authentication — all routes use the default org (SSO/login not yet built)
+- No rate limiting on cost-intensive endpoints (`/transcribe-audio`, `/summarize`, `/ask_meetings`)
 
 ## Timezone
 - Meeting timestamps stored in **SGT (Asia/Singapore, UTC+8)** using `ZoneInfo("Asia/Singapore")`
