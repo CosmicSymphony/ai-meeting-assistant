@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 
 from app.llm.provider_factory import get_llm_provider
-from app.repositories.meeting_repository import save_meeting
+from app.repositories.meeting_repository import save_meeting, slugify  # noqa: F401 (re-exported for callers)
 
 # Pre-compiled regex patterns for date extraction
 _RE_ISO_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
@@ -13,10 +13,6 @@ _RE_DMY_DASH = re.compile(r"\b(\d{2})-(\d{2})-(\d{4})\b")
 # Pre-compiled regex patterns for participant extraction
 _RE_PAREN_SPEAKER = re.compile(r"^([A-Za-z][A-Za-z0-9 _.-]*)\(([A-Za-z][A-Za-z0-9 _.-]{0,50})\)\s*:")
 _RE_PLAIN_SPEAKER = re.compile(r"^([A-Za-z][A-Za-z0-9 _.-]{0,50}):")
-
-# Pre-compiled regex for slugify
-_RE_SLUG_STRIP = re.compile(r"[^\w\s-]")
-_RE_SLUG_SPACE = re.compile(r"[\s_]+")
 
 
 def extract_participants_from_transcript(transcript_text: str) -> list[str]:
@@ -118,13 +114,6 @@ Transcript:
 {transcript_text}
 </transcript>
 """.strip()
-
-
-def slugify(text: str) -> str:
-    text = text.lower().strip()
-    text = _RE_SLUG_STRIP.sub("", text)
-    text = _RE_SLUG_SPACE.sub("_", text)
-    return text[:50].strip("_")
 
 
 def save_summary_to_db(summary_data: dict, org_id: int) -> dict:

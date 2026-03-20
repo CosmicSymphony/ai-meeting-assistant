@@ -12,12 +12,12 @@ from app.services.recall_service import (
     create_bot, get_bot, get_bot_transcript,
     format_transcript, get_bot_status_label, get_bot_recording_url,
 )
-from app.services.bot_processing_service import process_bot_session
+from app.services.bot_processing_service import process_bot_session, DONE_STATUSES
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
-_DONE_STATUSES = {"done", "call_ended"}
+_DONE_STATUSES = DONE_STATUSES
 _FAILED_STATUSES = {"fatal"}
 
 

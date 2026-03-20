@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import re
 import time
 from datetime import date
 from typing import Any, Dict, List, Optional
 
 from app.database import SessionLocal
 from app.models import Meeting
+
+_RE_SLUG_STRIP = re.compile(r"[^\w\s-]")
+_RE_SLUG_SPACE = re.compile(r"[\s_]+")
+
+
+def slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = _RE_SLUG_STRIP.sub("", text)
+    text = _RE_SLUG_SPACE.sub("_", text)
+    return text[:50].strip("_")
 
 
 # ── Per-tenant in-memory cache ─────────────────────────────────────────────────
@@ -94,13 +105,6 @@ def get_latest_meeting_file(org_id: int) -> str:
 def save_meeting(data: dict, org_id: int) -> Meeting:
     """Insert a new meeting row. Returns the saved Meeting object."""
     from datetime import datetime
-    import re
-
-    def slugify(text: str) -> str:
-        text = text.lower().strip()
-        text = re.sub(r"[^\w\s-]", "", text)
-        text = re.sub(r"[\s_]+", "_", text)
-        return text[:50].strip("_")
 
     title = data.get("meeting_title", "meeting")
     meeting_date = data.get("meeting_date", datetime.now().strftime("%Y-%m-%d"))

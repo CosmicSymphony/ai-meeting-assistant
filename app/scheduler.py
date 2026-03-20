@@ -117,7 +117,7 @@ def schedule_bot_deployment(scheduled_meeting_id: int, org_id: int, join_url: st
     return job_id
 
 
-_POLL_DONE_STATUSES = {"done", "call_ended"}
+from app.services.bot_processing_service import DONE_STATUSES as _POLL_DONE_STATUSES
 
 
 async def _poll_pending_bots_job() -> None:

@@ -2,6 +2,10 @@
 Shared background processing for completed Recall.ai bot sessions.
 Used by both the webhook handler and the polling fallback.
 """
+# Recall.ai status codes that mean the call has finished and is ready to process.
+# Imported by recall.py and scheduler.py to keep the set in one place.
+DONE_STATUSES = {"done", "call_ended"}
+
 from app.database import SessionLocal
 from app.models import BotSession, Meeting
 from app.services.recall_service import get_bot_transcript, format_transcript, get_bot_recording_url
