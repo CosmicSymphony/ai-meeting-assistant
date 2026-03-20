@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory="app/templates")
 MAX_AUDIO_SIZE = 25 * 1024 * 1024  # 25 MB
 
 _ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".mp4", ".m4a", ".wav", ".webm", ".ogg", ".flac", ".aac"}
-_ALLOWED_TRANSCRIPT_EXTENSIONS = {".txt", ".text"}
+_ALLOWED_TRANSCRIPT_EXTENSIONS = {".txt", ".text", ".vtt", ".docx"}
 
 
 def _check_audio_file(filename: str) -> str | None:
@@ -35,8 +35,38 @@ def _check_transcript_file(filename: str) -> str | None:
     """Returns an error message if the transcript file extension is not allowed, else None."""
     ext = Path(filename or "").suffix.lower()
     if ext not in _ALLOWED_TRANSCRIPT_EXTENSIONS:
-        return f"Unsupported file type '{ext}'. Please upload a plain text (.txt) transcript."
+        return f"Unsupported file type '{ext}'. Supported formats: .txt, .vtt (Teams), .docx (Teams)."
     return None
+
+
+def _extract_transcript_text(content: bytes, filename: str) -> str:
+    """
+    Extract plain text from a transcript file.
+    - .docx: extracts paragraph text via python-docx (preserves speaker labels)
+    - .vtt: strips WebVTT timestamps and metadata, returns speaker-labelled lines
+    - .txt/.text: decoded as UTF-8
+    """
+    ext = Path(filename or "").suffix.lower()
+
+    if ext == ".docx":
+        import io
+        from docx import Document
+        doc = Document(io.BytesIO(content))
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
+    if ext == ".vtt":
+        import re
+        text = content.decode("utf-8", errors="replace")
+        lines = []
+        for line in text.splitlines():
+            line = line.strip()
+            # Skip header, cue timestamps (00:00:00.000 --> ...), and blank lines
+            if not line or line == "WEBVTT" or re.match(r"^\d+$", line) or "-->" in line:
+                continue
+            lines.append(line)
+        return "\n".join(lines)
+
+    return content.decode("utf-8", errors="replace")
 
 
 def render_page(
@@ -88,7 +118,7 @@ async def summarize_transcript(request: Request, file: UploadFile = File(...), o
         if err := _check_transcript_file(file.filename):
             return render_page(request, org_id, summarize_error=err, scroll_to="card-summarize")
         content = await file.read()
-        transcript_text = content.decode("utf-8")
+        transcript_text = _extract_transcript_text(content, file.filename)
         result = await summarize_meeting(transcript_text, org_id)
         return render_page(request, org_id, summary_result=result, scroll_to="card-summary-result")
     except Exception as e:
