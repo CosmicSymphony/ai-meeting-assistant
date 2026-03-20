@@ -122,9 +122,17 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - `CALENDAR_WEBHOOK_SECRET` used as Graph clientState (separate from Azure auth credentials)
 - `SSL_VERIFY` env var controls outbound SSL verification — always `true` in production
 
+### Content-Security-Policy (2026-03-20)
+- CSP header added to `add_security_headers` middleware in `main.py`
+- Restricts all resource loading to same-origin; allows inline scripts/styles (`unsafe-inline`) since templates use them
+- `frame-ancestors 'none'` blocks framing (redundant with `X-Frame-Options: DENY` but belt-and-suspenders)
+- Tightening to nonce-based CSP would require template refactor — deferred
+
 ### Known gaps (planned)
 - Web UI has no authentication — all routes use the default org (SSO/login not yet built)
 - No rate limiting on cost-intensive endpoints (`/transcribe-audio`, `/summarize`, `/ask_meetings`)
+- No CSRF tokens on state-changing web forms (delete, ask, email, record)
+- No file type/size enforcement at the HTTP layer — audio endpoints accept any MIME type (service truncates questions at 500 chars; file validation is extension-only)
 
 ## Timezone
 - Meeting timestamps stored in **SGT (Asia/Singapore, UTC+8)** using `ZoneInfo("Asia/Singapore")`
