@@ -2,15 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Persistent Memory
+
+At the start of every session, read these files to restore context:
+- `../memory/user.md` — who the user is, their role and goals
+- `../memory/decisions.md` — key architectural and product decisions
+- `../memory/people.md` — people involved in the project
+- `../memory/preferences.md` — coding style and workflow preferences
+
+At the end of every session (or whenever something significant is learned), update the relevant file(s) with new information.
+
 ## Project
 FastAPI web app that transcribes, summarises, and queries meeting recordings.
-- **Location:** `C:\Users\itchjc\Documents\Projects\ai-meeting-assistant`
 - **GitHub:** https://github.com/CosmicSymphony/ai-meeting-assistant
 - **Production:** `https://ai-meeting-assistant-production-3552.up.railway.app/web/`
 - **Run locally:** `python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
   - If port 8000 is taken (ghost python.exe processes), kill with `taskkill /F /IM python.exe` then pick any free port
-- **Python:** 3.14 at `C:\Users\itchjc\AppData\Local\Python\bin\python.exe`
-- **No virtual environment** — packages installed globally
+- **Python:** 3.14, no virtual environment — packages installed globally
 
 ## Tests
 There are no automated tests in this project.
@@ -133,6 +141,12 @@ All LLM prompts wrap untrusted content in XML delimiters (`<transcript>`, `<ques
 - No rate limiting on cost-intensive endpoints (`/transcribe-audio`, `/summarize`, `/ask_meetings`)
 - No CSRF tokens on state-changing web forms (delete, ask, email, record)
 - No file type/size enforcement at the HTTP layer — audio endpoints accept any MIME type (service truncates questions at 500 chars; file validation is extension-only)
+
+## Playwright Browser Testing
+
+When testing with the Playwright MCP browser (via Claude Code), native OS file picker dialogs are intercepted — clicking upload areas will NOT open a file browser. Use the `browser_file_upload` tool instead, providing the file path directly.
+
+This is a Playwright limitation, not an app bug. The app works correctly in normal browsers.
 
 ## Timezone
 - Meeting timestamps stored in **SGT (Asia/Singapore, UTC+8)** using `ZoneInfo("Asia/Singapore")`
